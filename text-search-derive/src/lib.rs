@@ -1,7 +1,7 @@
 mod utils;
 mod macros;
 mod models;
-use models::{IndexType, StorageType};
+use models::{IndexType, StorageType, FieldMeta};
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{parse::Parser, parse_macro_input, Attribute, Data, DataStruct, DeriveInput, Field, Meta};
@@ -53,29 +53,8 @@ pub fn field(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     for meta_item in meta {
         let a = meta_item.path();
-        // match meta_item {
-
-        //     NestedMeta::Meta(Meta::Path(path)) if path.is_ident("text_indexed") => {
-        //         index_type = IndexType::Text;
-        //     }
-        //     NestedMeta::Meta(Meta::Path(path)) if path.is_ident("string_indexed") => {
-        //         index_type = IndexType::String;
-        //     }
-        //     NestedMeta::Meta(Meta::Path(path)) if path.is_ident("not_indexed") => {
-        //         index_type = IndexType::None;
-        //     }
-        //     NestedMeta::Meta(Meta::Path(path)) if path.is_ident("stored") => {
-        //         storage_type = StorageType::Stored;
-        //     }
-        //     NestedMeta::Meta(Meta::Path(path)) if path.is_ident("not_stored") => {
-        //         storage_type = StorageType::NotStored;
-        //     }
-        //     _ => {}
-        // }
     }
-
-    Field::parse_named(item);
-    let item1 = parse_macro_input!(item as syn::Field);
+    
 
     let input = Field::parse_named(item).unwrap();
     let field_name = input.ident.as_ref().unwrap();
