@@ -1,9 +1,9 @@
-use text_search_derive::field;
+use text_search_derive::*;
 
+#[derive(MySerialize)]
 pub struct Book {
     
     pub id: u32,
-    #[field(test, test)]
     pub name: String,
     pub author: String,
     pub description: String,
