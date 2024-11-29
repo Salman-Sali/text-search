@@ -1,5 +1,9 @@
+use text_search_derive::field;
+
 pub struct Book {
+    
     pub id: u32,
+    #[field(test, test)]
     pub name: String,
     pub author: String,
     pub description: String,

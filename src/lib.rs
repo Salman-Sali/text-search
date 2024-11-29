@@ -1,1 +1,1 @@
-use text_search_derive;
+pub use text_search_derive;

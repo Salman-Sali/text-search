@@ -5,6 +5,9 @@ version = 3
 [[package]]
 name = "example"
 version = "0.1.0"
+dependencies = [
+ "text-search-derive",
+]
 
 [[package]]
 name = "proc-macro2"
@@ -38,6 +41,9 @@ dependencies = [
 [[package]]
 name = "text-search"
 version = "0.1.0"
+dependencies = [
+ "text-search-derive",
+]
 
 [[package]]
 name = "text-search-derive"

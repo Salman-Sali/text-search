@@ -44,8 +44,10 @@ pub fn searchable(_attr: TokenStream, item: TokenStream) -> TokenStream {
 }
 
 #[proc_macro_attribute]
-pub fn field(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let meta = Attribute::parse_outer.parse(attr).unwrap();
+pub fn field(args: TokenStream, input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    
+    let meta = Attribute::parse_outer.parse(args).unwrap();
 
     // Default enum values
     let mut index_type = IndexType::None;
@@ -56,19 +58,19 @@ pub fn field(attr: TokenStream, item: TokenStream) -> TokenStream {
     }
     
 
-    let input = Field::parse_named(item).unwrap();
-    let field_name = input.ident.as_ref().unwrap();
+    // let input = Field::parse_named(input).unwrap();
+    // let field_name = input.ident.as_ref().unwrap();
 
 
-    let output = quote! {
-        #[allow(non_upper_case_globals)]
-        const #field_name: FieldMeta = FieldMeta {
-            index_type: #index_type,
-            storage_type: #storage_type,
-        };
+    // let output = quote! {
+    //     #[allow(non_upper_case_globals)]
+    //     const #field_name: FieldMeta = FieldMeta {
+    //         index_type: #index_type,
+    //         storage_type: #storage_type,
+    //     };
 
-        #input
-    };
+    //     #input
+    // };
 
-    output.into()
+    todo!()
 }
