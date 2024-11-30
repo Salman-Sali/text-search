@@ -4,7 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+template = { version = "0.1.0", path = "template" }
 text-search-derive = { version = "0.1.0", path = "text-search-derive" }
 
 [workspace]
-members = [ "example" , "text-search-derive"]
+members = [ "example" , "template", "text-search-derive"]

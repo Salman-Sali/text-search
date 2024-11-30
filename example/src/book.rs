@@ -1,12 +1,16 @@
-use text_search_derive::*;
+use text_search::Indexed;
 
-#[derive(MySerialize)]
+#[derive(Indexed)]
 pub struct Book {
-    
+    //default is #[not_indexed] #[stored]
     pub id: u32,
+    #[text_search(indexed_string)]
     pub name: String,
+    #[text_search(indexed_string)]
     pub author: String,
-    pub description: String,
+    #[text_search(indexed_text)]
+    #[text_search(not_stored)]
+    pub description: String,    
     pub published_on: u16
 }
 
