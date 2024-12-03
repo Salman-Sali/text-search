@@ -1,11 +1,13 @@
 use std::fmt::format;
 
-use super::symbol::*;
+use crate::context::Ctxt;
+
 use quote::quote;
 use syn::Field;
-use template::{FieldInfo, FieldType, Stored};
+use template::{symbol::*, FieldInfo, FieldType, Stored};
 
-pub fn get_field_info(field: &Field) -> proc_macro2::TokenStream {
+pub fn get_field_info(ctxt: &Ctxt, field: &Field) -> FieldInfo {
+    let mut is_id: bool = false;
     let mut field_type: Option<FieldType> = None;
     let mut stored: Option<Stored> = None;
 
@@ -14,38 +16,79 @@ pub fn get_field_info(field: &Field) -> proc_macro2::TokenStream {
             continue;
         }
 
-        if attr.meta.path() == INDEXED_STRING {
-            field_type = Some(FieldType::String);
-        } else if attr.meta.path() == INDEXED_TEXT {
-            field_type = Some(FieldType::Text);
-        } else if attr.meta.path() == NOT_INDEXED {
-            field_type = Some(FieldType::NotIndexed);
+        if let syn::Meta::List(meta) = &attr.meta {
+            if meta.tokens.is_empty() {
+                continue;
+            }
         }
 
-        if attr.meta.path() == STORED {
-            stored = Some(Stored::Yes);
-        } else if attr.meta.path() == NOT_STORED {
-            stored = Some(Stored::No);
+        if let Err(err) = attr.parse_nested_meta(|meta| {
+            if meta.path == ID {
+                is_id = true;
+            }
+
+            let _field_type = if meta.path == INDEXED_STRING {
+                Some(FieldType::indexed_string)
+            } else if meta.path == INDEXED_TEXT {
+                Some(FieldType::indexed_text)
+            } else if meta.path == NOT_INDEXED {
+                 Some(FieldType::not_indexed)
+            } else {
+                None
+            };
+    
+            let _stored = if meta.path == STORED {
+                Some(Stored::stored)
+            } else if meta.path == NOT_STORED {
+                Some(Stored::not_stored)
+            } else {
+                None
+            };
+
+            if field_type.is_some() && _field_type.is_some() {
+                panic!("Cannot have {:?} and {:?} together", field_type.clone().unwrap(), _field_type.unwrap());
+            } else if field_type.is_none() {
+                field_type = _field_type;
+            }
+
+            if stored.is_some() && _stored.is_some() {
+                panic!("Cannot have {:?} and {:?} together", stored.clone().unwrap(), _stored.unwrap());
+            } else if stored.is_none() {
+                stored = _stored;
+            }
+
+            if is_id && (field_type.is_some() || stored.is_some()) {
+                panic!("Cannot have other attributes when field has id attribute.")
+            }
+
+            Ok(())
+        }){
+            ctxt.syn_error(err);
         }
     }
 
-    let field_type_token = match field_type {
-        Some(x) => match x {
-            FieldType::String => quote! {text_search::FieldType::String},
-            FieldType::Text => quote! {text_search::FieldType::Text},
-            FieldType::NotIndexed => quote! {text_search::FieldType::NotIndexed},
-        },
-        None => quote! {text_search::FieldType::NotIndexed},
+    let field_name = field.ident.as_ref().unwrap().to_string();
+    if is_id {
+        FieldInfo::new_id_field(field_name)
+    } else {
+        FieldInfo::new(field_name, field_type, stored)
+    }
+    
+}
+
+
+pub fn generate_field_info_code(field_info: &FieldInfo) -> proc_macro2::TokenStream {
+    let field_type_token = match field_info.field_type {
+            FieldType::indexed_string => quote! {text_search::FieldType::indexed_string},
+            FieldType::indexed_text => quote! {text_search::FieldType::indexed_text},
+            FieldType::not_indexed => quote! {text_search::FieldType::not_indexed}
     };
 
-    let stored_token = match stored {
-        Some(x) => match x {
-            Stored::Yes => quote! {text_search::Stored::Yes},
-            Stored::No => quote! {text_search::Stored::No},
-        },
-        None => quote!{text_search::Stored::No},
+    let stored_token = match field_info.stored {
+            Stored::stored => quote! {text_search::Stored::stored},
+            Stored::not_stored => quote! {text_search::Stored::not_stored}
     };
 
-    let field_name = format!("{}", field.ident.as_ref().unwrap().to_string());
+    let field_name = format!("{}", field_info.field_name);
     quote!{text_search::FieldInfo::new(#field_name.into(), #field_type_token, #stored_token),}
 }

@@ -1,5 +1,5 @@
-use crate::field_info::FieldInfo;
+use crate::struct_info::StructInfo;
 
 pub trait Indexable {
-    fn get_field_configs(self) -> Vec<FieldInfo>;
-}
+    fn get_struct_info(self) -> StructInfo;
+}       

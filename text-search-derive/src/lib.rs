@@ -1,6 +1,8 @@
 mod models;
-mod symbol;
 mod field;
+mod context;
+mod struct;
+use context::Ctxt;
 use field::get_field_info;
 use models::*;
 
@@ -10,7 +12,8 @@ use syn::{parse_macro_input, Data, DeriveInput, Fields, Ident, Meta};
 
 
 #[proc_macro_derive(Indexed, attributes(text_search))]
-pub fn my_serialize(input: TokenStream) -> TokenStream {
+pub fn text_search_macro(input: TokenStream) -> TokenStream {
+    let ctxt = Ctxt::new();
     let input = parse_macro_input!(input as DeriveInput);
     let name = input.ident;
 
@@ -26,8 +29,10 @@ pub fn my_serialize(input: TokenStream) -> TokenStream {
 
     let mut field_tokens: proc_macro2::TokenStream = quote! {};
     for field in fields.named.iter() {
-        get_field_info(field).to_tokens(&mut field_tokens);
+        get_field_info(&ctxt, field).to_tokens(&mut field_tokens);
     }
+
+    //ctxt.check();
 
     impl_indexable_token(name, field_tokens).into()
 }
@@ -35,10 +40,12 @@ pub fn my_serialize(input: TokenStream) -> TokenStream {
 fn impl_indexable_token(struct_name: Ident, field_tokens: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
     quote! {
         impl text_search::Indexable for #struct_name {
-            fn get_field_configs(self) -> Vec<text_search::FieldInfo> {
-                vec![
-                    #field_tokens
-                ]
+            fn get_struct_info(self) -> text_search::StructInfo {
+                text_search::StructInfo {
+                    fields: vec![
+                        #field_tokens
+                    ]
+                }
             }
         }
     }

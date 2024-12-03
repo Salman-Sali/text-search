@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+tantivy = "0.22.0"
 template = { version = "0.1.0", path = "template" }
 text-search-derive = { version = "0.1.0", path = "text-search-derive" }
 

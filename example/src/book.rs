@@ -2,15 +2,16 @@ use text_search::Indexed;
 
 #[derive(Indexed)]
 pub struct Book {
-    //default is #[not_indexed] #[stored]
+    //default is #[text_search(not_indexed, stored)]
+
+    #[text_search(id)]//id behaves like #[text_search(indexed, stored)]
     pub id: u32,
     #[text_search(indexed_string)]
     pub name: String,
-    #[text_search(indexed_string)]
+    #[text_search(indexed_string, stored)]
     pub author: String,
-    #[text_search(indexed_text)]
-    #[text_search(not_stored)]
-    pub description: String,    
+    #[text_search(indexed_text, not_stored)]
+    pub description: String,
     pub published_on: u16
 }
 
