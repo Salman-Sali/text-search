@@ -4,7 +4,8 @@ use text_search::Indexed;
 pub struct Book {
     //default is #[text_search(not_indexed, stored)]
 
-    #[text_search(id)]//id behaves like #[text_search(indexed, stored)]
+    //id behaves like #[text_search(indexed, stored)]
+    #[text_search(id)]
     pub id: u32,
     #[text_search(indexed_string)]
     pub name: String,

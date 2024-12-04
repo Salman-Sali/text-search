@@ -5,3 +5,4 @@ edition = "2021"
 
 [dependencies]
 syn = "2.0.89"
+tantivy = "0.22.0"

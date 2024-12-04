@@ -1,15 +1,15 @@
-mod models;
-mod field;
 mod context;
-mod struct;
+mod field_info;
+mod models;
+mod struct_info;
+mod indexable;
 use context::Ctxt;
-use field::get_field_info;
-use models::*;
+use field_info::{gen_field_info_token, get_field_info};
 
 use proc_macro::TokenStream;
-use quote::{quote, ToTokens, TokenStreamExt};
-use syn::{parse_macro_input, Data, DeriveInput, Fields, Ident, Meta};
-
+use quote::{quote, ToTokens};
+use syn::{parse_macro_input, Data, DeriveInput, Fields, Ident};
+use template::StructInfo;
 
 #[proc_macro_derive(Indexed, attributes(text_search))]
 pub fn text_search_macro(input: TokenStream) -> TokenStream {
@@ -27,26 +27,12 @@ pub fn text_search_macro(input: TokenStream) -> TokenStream {
         panic!("Only structs are supported.");
     };
 
-    let mut field_tokens: proc_macro2::TokenStream = quote! {};
+    let mut struct_info = StructInfo::new();
+
     for field in fields.named.iter() {
-        get_field_info(&ctxt, field).to_tokens(&mut field_tokens);
+        struct_info.add_field(get_field_info(&ctxt, field));
     }
 
-    //ctxt.check();
-
-    impl_indexable_token(name, field_tokens).into()
+    indexable::impl_indexable_token(name, struct_info).into()
 }
 
-fn impl_indexable_token(struct_name: Ident, field_tokens: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
-    quote! {
-        impl text_search::Indexable for #struct_name {
-            fn get_struct_info(self) -> text_search::StructInfo {
-                text_search::StructInfo {
-                    fields: vec![
-                        #field_tokens
-                    ]
-                }
-            }
-        }
-    }
-}
