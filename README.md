@@ -4,10 +4,10 @@ Diesel is to SQL as text-search is to tantivy.
 
 UNDER DEVELOPMENT
 
-Currently will only function if:
-• all fields are "stored"
-• fields must be String or i32
-• refer example
+Currently will only function if:  
+  - all fields are "stored" \r
+  - fields must be String or i32 
+  - refer example 
 
 ```rust
 fn main() {
