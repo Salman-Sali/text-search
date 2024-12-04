@@ -6,14 +6,14 @@ pub struct Book {
 
     //id behaves like #[text_search(indexed, stored)]
     #[text_search(id)]
-    pub id: u32,
-    #[text_search(indexed_string)]
+    pub id: i32,
+    #[text_search(indexed_text, stored)]
     pub name: String,
-    #[text_search(indexed_string, stored)]
+    #[text_search(indexed_text, stored)]
     pub author: String,
-    #[text_search(indexed_text, not_stored)]
+    #[text_search(indexed_text, stored)]
     pub description: String,
-    pub published_on: u16
+    pub published_on: i32
 }
 
 impl Book {

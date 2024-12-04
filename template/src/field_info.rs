@@ -28,7 +28,7 @@ impl FieldInfo {
             is_id: false,
             field_type,
             field_name,
-            index_type: IndexType::not_indexed,
+            index_type: IndexType::indexed,
             stored: true
         }
     }
@@ -61,7 +61,7 @@ impl FieldInfo {
                     numeric_options = numeric_options.set_stored();
                 }
 
-                schema_builder.add_u64_field(&self.field_name, numeric_options);
+                schema_builder.add_i64_field(&self.field_name, numeric_options);
             },
             FieldType::Unhandled => panic!("Unhandled field type")
         }

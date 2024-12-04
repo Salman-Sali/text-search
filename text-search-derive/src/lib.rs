@@ -27,7 +27,7 @@ pub fn text_search_macro(input: TokenStream) -> TokenStream {
         panic!("Only structs are supported.");
     };
 
-    let mut struct_info = StructInfo::new();
+    let mut struct_info = StructInfo::new(name.to_string());
 
     for field in fields.named.iter() {
         struct_info.add_field(get_field_info(&ctxt, field));

@@ -10,7 +10,12 @@ fn main() {
     let books = Book::get_sample_books();
     
     for book in books {
-        let b = 1;
         indexer.index(book);        
     }
+    let result = indexer.search("name", "Let's Get Rusty Vol 1", 10);
+    for ele in result {
+        print!("{}", ele.name);
+    }
 }
+
+
