@@ -5,8 +5,11 @@ use std::{
 };
 
 use tantivy::{
-    collector::TopDocs, directory::MmapDirectory, query::QueryParser, schema::Schema, Index,
-    IndexWriter, TantivyDocument,
+    collector::{Count, TopDocs},
+    directory::MmapDirectory,
+    query::{FuzzyTermQuery, PhrasePrefixQuery, Query, QueryParser, RegexQuery},
+    schema::Schema,
+    DocAddress, Index, IndexWriter, ReloadPolicy, Searcher, TantivyDocument, Term,
 };
 use template::Indexable;
 
@@ -52,27 +55,70 @@ impl<T: Indexable> Indexer<T> {
     }
 
     pub fn search(&self, field_name: &str, query: &str, result_count: usize) -> Vec<T> {
-        let reader = self
-            .index
-            .reader_builder()
-            .reload_policy(tantivy::ReloadPolicy::OnCommitWithDelay)
-            .try_into()
-            .expect("Error while constructing reader for search operation.");
-
         let field = self
             .schema
             .get_field(field_name)
             .expect("Field with provided field name does not exsit in schema.");
 
-        let searcher = reader.searcher();
-        let _query = QueryParser::for_index(&self.index, vec![field])
+        let query = QueryParser::for_index(&self.index, vec![field])
             .parse_query(query)
             .expect("Error while parsing query.");
 
+        self._search(&query, result_count)
+    }
+
+    pub fn fuzzy_search(&self, field_name: &str, query: &str, result_count: usize) -> Vec<T> {
+        let field = self
+            .schema
+            .get_field(field_name)
+            .expect("Field with provided field name does not exsit in schema.");
+
+        let term: Term = Term::from_field_text(field, query);
+        let query = FuzzyTermQuery::new(term, 2, true);
+
+        self._search(&query, result_count)
+    }
+
+    pub fn regex_query(&self, field_name: &str, query: &str, result_count: usize) -> Vec<T> {
+        let field = self
+            .schema
+            .get_field(field_name)
+            .expect("Field with provided field name does not exsit in schema.");
+
+        let query =
+            RegexQuery::from_pattern(query, field).expect("Error while building regex query.");
+
+        self._search(&query, result_count)
+    }
+
+    pub fn prefix_query(&self, field_name: &str, query: &str, result_count: usize) -> Vec<T> {
+        let field = self
+            .schema
+            .get_field(field_name)
+            .expect("Field with provided field name does not exsit in schema.");
+
+        let t = Term::from_field_text(field, query);
+        let query = PhrasePrefixQuery::new(vec![t]);
+        self._search(&query, result_count)
+    }
+
+    fn _search(&self, query: &dyn Query, result_count: usize) -> Vec<T> {
+        let reader = self
+            .index
+            .reader_builder()
+            .reload_policy(ReloadPolicy::OnCommitWithDelay)
+            .try_into()
+            .expect("Error while constructing reader for search operation.");
+        let searcher = reader.searcher();
+
         let top_docs = searcher
-            .search(&_query, &TopDocs::with_limit(result_count))
+            .search(query, &TopDocs::with_limit(result_count))
             .expect("Error while performing search operation.");
 
+        Self::docs_to_t(top_docs, &searcher)
+    }
+
+    fn docs_to_t(top_docs: Vec<(f32, DocAddress)>, searcher: &Searcher) -> Vec<T> {
         let mut result: Vec<T> = vec![];
         for (_score, doc_address) in top_docs {
             let doc: TantivyDocument = searcher

@@ -10,6 +10,22 @@ Currently will only function if:
   - refer example 
 
 ```rust
+#[derive(Indexed)]
+pub struct Book {
+    //default is #[text_search(not_indexed, stored)]
+
+    //id behaves like #[text_search(indexed, stored)]
+    #[text_search(id)]
+    pub id: i32,
+    #[text_search(indexed_text, stored)]
+    pub name: String,
+    #[text_search(indexed_text, stored)]
+    pub author: String,
+    #[text_search(indexed_text, stored)]
+    pub description: String,
+    pub published_on: i32
+}
+
 fn main() {
   let indexer = Indexer::new(Path::new("/path/to/your/dir"));
   let books = Book::get_sample_books();
@@ -17,6 +33,10 @@ fn main() {
   for book in books {
       indexer.index(book);        
   }
-  let result = indexer.search("name", "Let's Get Rusty Vol 1", 10);
+  let basic_search_result = indexer.search("name", "Rust", 10);
+
+  let fuzzy_search_result = indexer.fuzzy_search("name", "Rosty", 10);
+
+  let regex_search_result = indexer.regex_query("name", "rustacea.*", 10);
 }
 ```
