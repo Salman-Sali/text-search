@@ -7,7 +7,9 @@ use std::{
 use tantivy::{
     collector::{Count, TopDocs},
     directory::MmapDirectory,
-    query::{FuzzyTermQuery, PhrasePrefixQuery, Query, QueryParser, RegexQuery},
+    query::{
+        BooleanQuery, FuzzyTermQuery, Occur, PhrasePrefixQuery, Query, QueryParser, RegexQuery,
+    },
     schema::Schema,
     DocAddress, Index, IndexWriter, ReloadPolicy, Searcher, TantivyDocument, Term,
 };
@@ -17,6 +19,7 @@ pub struct Indexer<T: Indexable> {
     path: PathBuf,
     index: Index,
     schema: Schema,
+    index_writer: Option<IndexWriter>,
     _marker: PhantomData<T>,
 }
 
@@ -35,23 +38,32 @@ impl<T: Indexable> Indexer<T> {
             path: path.into(),
             index,
             schema,
+            index_writer: None,
             _marker: PhantomData,
         }
     }
 
-    pub fn index(&self, data: T) {
-        let doc = data.as_document();
-        let mut index_writer: IndexWriter = self
-            .index
-            .writer(50_000_000)
-            .expect("Error while creating index writer.");
+    pub fn index(&mut self, data: T) {
+        if self.index_writer.is_none() {
+            self.index_writer = Some(
+                self.index
+                    .writer(50_000_000)
+                    .expect("Error while creating index writer."),
+            );
+        }
 
-        index_writer
+        let doc = data.as_document();
+        self.index_writer.as_ref().unwrap()
             .add_document(doc)
-            .expect("Error while adding document.");
-        index_writer
-            .commit()
-            .expect("Error while commiting data to index.");
+            .expect("Error while adding document.");        
+    }
+
+    pub fn commit(&mut self) {
+        if self.index_writer.is_some() {
+            self.index_writer.as_mut().unwrap().commit().expect("Error while commiting index data.");
+        }
+
+        self.index_writer = None;
     }
 
     pub fn search(&self, field_name: &str, query: &str, result_count: usize) -> Vec<T> {
@@ -79,7 +91,7 @@ impl<T: Indexable> Indexer<T> {
         self._search(&query, result_count)
     }
 
-    pub fn regex_query(&self, field_name: &str, query: &str, result_count: usize) -> Vec<T> {
+    pub fn regex_search(&self, field_name: &str, query: &str, result_count: usize) -> Vec<T> {
         let field = self
             .schema
             .get_field(field_name)
@@ -91,14 +103,53 @@ impl<T: Indexable> Indexer<T> {
         self._search(&query, result_count)
     }
 
-    pub fn prefix_query(&self, field_name: &str, query: &str, result_count: usize) -> Vec<T> {
+    ///Uses regex pattern matching query along with fuzzy search.
+    ///Maybe slow.
+    pub fn hybrid_search(&self, field_name: &str, query: &str, result_count: usize) -> Vec<T> {
         let field = self
             .schema
             .get_field(field_name)
             .expect("Field with provided field name does not exsit in schema.");
 
-        let t = Term::from_field_text(field, query);
-        let query = PhrasePrefixQuery::new(vec![t]);
+        let terms: Vec<Term> = query
+            .to_lowercase()
+            .split(" ")
+            .map(|term| Term::from_field_text(field, term))
+            .collect();
+
+        let fuzzy_queries: Vec<(Occur, Box<dyn Query>)> = terms
+            .iter()
+            .map(|term| {
+                (
+                    Occur::Should,
+                    Box::new(FuzzyTermQuery::new(term.clone(), 2, true)) as Box<dyn Query>,
+                )
+            })
+            .collect();
+
+        // let regex_queries: Vec<(Occur, Box<dyn Query>)> = query.to_lowercase()
+        //     .split(" ")
+        //     .map(|q| {
+        //         (
+        //             Occur::Should,
+        //             Box::new(
+        //                 RegexQuery::from_pattern(&format!("{}.*", q), field)
+        //                     .expect("Error while building regex query."),
+        //             ) as Box<dyn Query>,
+        //         )
+        //     })
+        //     .collect();
+
+        let phrase_prefix_query: (Occur, Box<dyn Query>) = (
+            Occur::Should,
+            Box::new(PhrasePrefixQuery::new(terms)) as Box<dyn Query>,
+        );
+
+        let mut boolean_quries: Vec<(Occur, Box<dyn Query>)> = vec![phrase_prefix_query];
+        boolean_quries.extend(fuzzy_queries);
+        //boolean_quries.extend(regex_queries);
+
+        let query = BooleanQuery::new(boolean_quries);
         self._search(&query, result_count)
     }
 

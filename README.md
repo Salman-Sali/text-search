@@ -27,16 +27,18 @@ pub struct Book {
 }
 
 fn main() {
-  let indexer = Indexer::new(Path::new("/path/to/your/dir"));
+  let mut indexer = Indexer::<Book>::new(Path::new("/path/to/your/dir"));
   let books = Book::get_sample_books();
   
   for book in books {
       indexer.index(book);        
   }
-  let basic_search_result = indexer.search("name", "Rust", 10);
+  indexer.commit();
 
-  let fuzzy_search_result = indexer.fuzzy_search("name", "Rosty", 10);
+  let basic_search_result: Vec<Book> = indexer.search("name", "Rust", 10);
 
-  let regex_search_result = indexer.regex_query("name", "rustacea.*", 10);
+  let fuzzy_search_result: Vec<Book> = indexer.fuzzy_search("name", "Rosty", 10);
+
+  let regex_search_result: Vec<Book> = indexer.regex_query("name", "rustacea.*", 10);
 }
 ```
