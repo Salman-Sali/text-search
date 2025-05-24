@@ -1,6 +1,6 @@
 use text_search::Indexed;
 
-#[derive(Indexed)]
+#[derive(Indexed, Clone)]
 pub struct Book {
     //default is #[text_search(not_indexed, stored)]
 

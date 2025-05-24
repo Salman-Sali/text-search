@@ -1,10 +1,9 @@
 mod context;
 mod field_info;
-mod models;
 mod struct_info;
 mod indexable;
 use context::Ctxt;
-use field_info::{gen_field_info_token, get_field_info};
+use field_info::{generate_field_info_token, get_field_info};
 
 use proc_macro::TokenStream;
 use quote::{quote, ToTokens};

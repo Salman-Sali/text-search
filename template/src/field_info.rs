@@ -25,7 +25,7 @@ impl FieldInfo {
 
     pub fn new_id_field(field_name: String, field_type: FieldType) -> Self {
         Self {
-            is_id: false,
+            is_id: true,
             field_type,
             field_name,
             index_type: IndexType::indexed,

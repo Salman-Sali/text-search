@@ -43,7 +43,7 @@ impl<T: Indexable> Indexer<T> {
         }
     }
 
-    pub fn index(&mut self, data: T) {
+    fn create_index_writer(&mut self) {
         if self.index_writer.is_none() {
             self.index_writer = Some(
                 self.index
@@ -51,11 +51,30 @@ impl<T: Indexable> Indexer<T> {
                     .expect("Error while creating index writer."),
             );
         }
+    }
+
+    pub fn index(&mut self, data: T) {
+        self.create_index_writer();
 
         let doc = data.as_document();
         self.index_writer.as_ref().unwrap()
             .add_document(doc)
             .expect("Error while adding document.");        
+    }
+
+    pub fn delete(&mut self, data: T) {
+        self.create_index_writer();
+        self.index_writer.as_ref().unwrap().delete_term(data.get_id_term());
+    }
+
+    pub fn delete_using_term(&mut self, term: tantivy::Term) {
+        self.create_index_writer();
+        self.index_writer.as_ref().unwrap().delete_term(term);
+    }
+
+    pub fn update(&mut self, data: T) {
+        self.delete(data.clone());
+        self.index(data);
     }
 
     pub fn commit(&mut self) {

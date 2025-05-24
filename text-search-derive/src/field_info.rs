@@ -2,7 +2,7 @@ use std::fmt::format;
 
 use crate::context::Ctxt;
 
-use quote::quote;
+use quote::{quote, ToTokens};
 use syn::{parse_str, Expr, Field, Type};
 use template::{symbol::*, FieldInfo, FieldType, IndexType};
 
@@ -92,7 +92,7 @@ pub fn get_field_info(ctxt: &Ctxt, field: &Field) -> FieldInfo {
     }
 }
 
-pub fn gen_field_info_token(field_info: &FieldInfo) -> proc_macro2::TokenStream {
+pub fn generate_field_info_token(field_info: &FieldInfo) -> proc_macro2::TokenStream {
     let index_type_token = match field_info.index_type {
         IndexType::indexed_string => quote! {text_search::IndexType::indexed_string},
         IndexType::indexed_text => quote! {text_search::IndexType::indexed_text},
@@ -116,7 +116,7 @@ pub fn gen_field_info_token(field_info: &FieldInfo) -> proc_macro2::TokenStream 
     quote! {text_search::FieldInfo::new(#field_name.into(), #field_type_token, Some(#index_type_token), #stored_token),}
 }
 
-pub fn gen_field_info_to_document(field_info: &FieldInfo) -> proc_macro2::TokenStream {
+pub fn generate_field_info_to_document(field_info: &FieldInfo) -> proc_macro2::TokenStream {
     let field_name = parse_str::<Expr>(&field_info.field_name).unwrap();
     let field_name_string = format!("{}", field_info.field_name);
     match field_info.field_type {
@@ -132,7 +132,7 @@ pub fn gen_field_info_to_document(field_info: &FieldInfo) -> proc_macro2::TokenS
     }
 }
 
-pub fn gen_field_info_temp_var_assignments(field_info: &FieldInfo) -> proc_macro2::TokenStream {
+pub fn generate_field_info_temp_var_assignments(field_info: &FieldInfo) -> proc_macro2::TokenStream {
     let field_name = &field_info.field_name;
     let field_name_value = format!("{}", field_name);
     let field_id_var = parse_str::<Expr>((field_name.to_owned() + "_field_id").as_str()).unwrap();
@@ -148,4 +148,25 @@ pub fn gen_field_info_temp_var_assignments(field_info: &FieldInfo) -> proc_macro
         let #field_owned_value_var = doc.field_values().into_iter().filter(|x| x.field.field_id() == #field_id_var).next().unwrap().value.clone();
         let #field_value_var = #field_value_assignment
     }
+}
+
+pub fn generate_term_initialisation(field_info: &FieldInfo, include_self: bool) -> proc_macro2::TokenStream {
+    let field_name = parse_str::<Expr>(&{
+        if include_self {
+            let value = format!("self.{}", field_info.field_name.clone());
+            value
+        } else {
+            field_info.field_name.clone()
+        }        
+    }).unwrap();
+    //let field_name = parse_str::<Expr>(&field_info.field_name).unwrap();
+    return match field_info.field_type {
+        FieldType::String => quote! {
+            return text_search::tantivy::Term::from_field_text(field, &#field_name);
+        },
+        FieldType::I32 => quote! {
+            return text_search::tantivy::Term::from_field_i64(field, #field_name as i64);
+        },
+        FieldType::Unhandled => panic!("Unhandled field type."),
+    };
 }

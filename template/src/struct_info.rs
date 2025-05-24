@@ -26,4 +26,8 @@ impl StructInfo {
         }
         schema_builder.build()
     }
+
+    pub fn get_id_field(&self) -> &FieldInfo {
+        return self.fields.iter().find(|x| x.is_id).expect("Missing id field.");
+    }
 }
