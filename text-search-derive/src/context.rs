@@ -15,18 +15,18 @@ impl Ctxt {
         self.errors.borrow_mut().as_mut().unwrap().push(err);
     }
 
-    pub fn check(self) -> syn::Result<()> {
-        let mut errors = self.errors.borrow_mut().take().unwrap().into_iter();
+    // pub fn check(self) -> syn::Result<()> {
+    //     let mut errors = self.errors.borrow_mut().take().unwrap().into_iter();
 
-        let mut combined = match errors.next() {
-            Some(first) => first,
-            None => return Ok(()),
-        };
+    //     let mut combined = match errors.next() {
+    //         Some(first) => first,
+    //         None => return Ok(()),
+    //     };
 
-        for rest in errors {
-            combined.combine(rest);
-        }
+    //     for rest in errors {
+    //         combined.combine(rest);
+    //     }
 
-        Err(combined)
-    }
+    //     Err(combined)
+    // }
 }

@@ -3,11 +3,10 @@ mod field_info;
 mod struct_info;
 mod indexable;
 use context::Ctxt;
-use field_info::{generate_field_info_token, get_field_info};
+use field_info::get_field_info;
 
 use proc_macro::TokenStream;
-use quote::{quote, ToTokens};
-use syn::{parse_macro_input, Data, DeriveInput, Fields, Ident};
+use syn::{parse_macro_input, Data, DeriveInput, Fields};
 use template::StructInfo;
 
 #[proc_macro_derive(Indexed, attributes(text_search))]

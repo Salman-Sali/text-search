@@ -1,8 +1,7 @@
-use std::{default, fmt::Display};
 
-use tantivy::schema::{NumericOptions, SchemaBuilder, TextOptions, INDEXED as TavtivyINDEXED, STORED, STRING, TEXT};
+use tantivy::schema::{NumericOptions, SchemaBuilder, TextOptions, INDEXED as TavtivyINDEXED, STRING, TEXT};
 
-use crate::{index_type::IndexType, symbol::*, FieldType};
+use crate::{index_type::IndexType, FieldType};
 
 pub struct FieldInfo {
     pub is_id: bool,

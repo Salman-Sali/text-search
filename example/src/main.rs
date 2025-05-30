@@ -1,7 +1,7 @@
 use std::{fs, path::Path};
 
 use book::Book;
-use text_search::{indexer::Indexer, tantivy::IndexReader, Indexable};
+use text_search::indexer::Indexer;
 
 mod book;
 

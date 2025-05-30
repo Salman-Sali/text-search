@@ -1,8 +1,7 @@
-use std::fmt::format;
 
 use crate::context::Ctxt;
 
-use quote::{quote, ToTokens};
+use quote::quote;
 use syn::{parse_str, Expr, Field, Type};
 use template::{symbol::*, FieldInfo, FieldType, IndexType};
 

@@ -1,11 +1,11 @@
 use std::{
     fs,
     marker::PhantomData,
-    path::{Path, PathBuf},
+    path::Path,
 };
 
 use tantivy::{
-    collector::{Count, TopDocs},
+    collector::TopDocs,
     directory::MmapDirectory,
     query::{
         BooleanQuery, FuzzyTermQuery, Occur, PhrasePrefixQuery, Query, QueryParser, RegexQuery,
@@ -16,7 +16,6 @@ use tantivy::{
 use template::Indexable;
 
 pub struct Indexer<T: Indexable> {
-    path: PathBuf,
     index: Index,
     schema: Schema,
     index_writer: Option<IndexWriter>,
@@ -35,7 +34,6 @@ impl<T: Indexable> Indexer<T> {
             .expect("Error while opening or creating index. If schema has been updated, remove the old data.");
 
         Self {
-            path: path.into(),
             index,
             schema,
             index_writer: None,
