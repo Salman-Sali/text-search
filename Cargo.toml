@@ -10,8 +10,8 @@ keywords = ["tantivy", "simple", "text", "search"]
 
 [dependencies]
 tantivy = "0.22.0"
-template = { version = "0.1.0", path = "template" }
+text-search-core = { version = "0.1.0", path = "text-search-core" }
 text-search-derive = { version = "0.1.0", path = "text-search-derive" }
 
 [workspace]
-members = [ "example" , "template", "text-search-derive"]
+members = [ "example" , "text-search-core", "text-search-derive"]

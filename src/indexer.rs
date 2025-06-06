@@ -13,7 +13,7 @@ use tantivy::{
     schema::Schema,
     DocAddress, Index, IndexWriter, ReloadPolicy, Searcher, TantivyDocument, Term,
 };
-use template::Indexable;
+use text_search_core::Indexable;
 
 pub struct Indexer<T: Indexable> {
     index: Index,

@@ -7,7 +7,7 @@ use field_info::get_field_info;
 
 use proc_macro::TokenStream;
 use syn::{parse_macro_input, Data, DeriveInput, Fields};
-use template::StructInfo;
+use text_search_core::StructInfo; 
 
 #[proc_macro_derive(Indexed, attributes(text_search))]
 pub fn text_search_macro(input: TokenStream) -> TokenStream {

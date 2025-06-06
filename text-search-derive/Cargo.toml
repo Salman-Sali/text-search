@@ -1,7 +1,11 @@
 [package]
 name = "text-search-derive"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
+description = "Derive macro for text-search crate"
+homepage = "https://github.com/Salman-Sali/text-search"
+license = "MIT"
+
 
 [lib]
 proc-macro = true
@@ -10,4 +14,4 @@ proc-macro = true
 proc-macro2 = "1.0.92"
 quote = "1.0.37"
 syn = "2.0.89"
-template = { version = "0.1.0", path = "../template" }
+text-search-core = { version = "0.1.0", path = "../text-search-core" }

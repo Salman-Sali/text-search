@@ -3,7 +3,7 @@ use crate::context::Ctxt;
 
 use quote::quote;
 use syn::{parse_str, Expr, Field, Type};
-use template::{symbol::*, FieldInfo, FieldType, IndexType};
+use text_search_core::{symbol::*, FieldInfo, FieldType, IndexType};
 
 pub fn get_field_info(ctxt: &Ctxt, field: &Field) -> FieldInfo {
     let mut is_id: bool = false;

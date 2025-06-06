@@ -1,6 +1,6 @@
 use quote::{quote, ToTokens};
 use syn::{parse_str, Expr, Ident};
-use template::StructInfo;
+use text_search_core::StructInfo; 
 
 use crate::field_info::{generate_field_info_temp_var_assignments, generate_field_info_to_document, generate_field_info_token, generate_term_initialisation};
 
@@ -105,9 +105,9 @@ fn generate_get_term_from_id(struct_info: &StructInfo) -> proc_macro2::TokenStre
     let struct_name = parse_str::<Expr>(&struct_info.struct_name).unwrap();
     let id_field_info = struct_info.get_id_field();
     let id_field_type = match id_field_info.field_type {
-        template::FieldType::String => quote! { String },
-        template::FieldType::I32 => quote! { i32 },
-        template::FieldType::Unhandled => panic!("unhandled field type."),
+        text_search_core::FieldType::String => quote! { String },
+        text_search_core::FieldType::I32 => quote! { i32 },
+        text_search_core::FieldType::Unhandled => panic!("unhandled field type."),
     };
     let id_field_name_expr = parse_str::<Expr>(&id_field_info.field_name).unwrap();
     let field_name = id_field_info.field_name.clone();

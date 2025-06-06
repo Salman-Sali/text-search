@@ -1,0 +1,11 @@
+[package]
+name = "text-search-core"
+version = "0.1.0"
+edition = "2024"
+description = "Core utils for the text-search crate."
+homepage = "https://github.com/Salman-Sali/text-search"
+license = "MIT"
+
+[dependencies]
+syn = "2.0.89"
+tantivy = "0.22.0"
