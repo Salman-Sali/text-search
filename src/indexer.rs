@@ -1,17 +1,13 @@
-use std::{
-    fs,
-    marker::PhantomData,
-    path::Path,
-};
+use std::{collections::HashMap, fs, marker::PhantomData, path::Path};
 
 use tantivy::{
+    DocAddress, Index, IndexWriter, ReloadPolicy, Searcher, TantivyDocument, Term,
     collector::TopDocs,
     directory::MmapDirectory,
     query::{
         BooleanQuery, FuzzyTermQuery, Occur, PhrasePrefixQuery, Query, QueryParser, RegexQuery,
     },
     schema::Schema,
-    DocAddress, Index, IndexWriter, ReloadPolicy, Searcher, TantivyDocument, Term,
 };
 use text_search_core::Indexable;
 
@@ -55,14 +51,19 @@ impl<T: Indexable> Indexer<T> {
         self.create_index_writer();
 
         let doc = data.as_document();
-        self.index_writer.as_ref().unwrap()
+        self.index_writer
+            .as_ref()
+            .unwrap()
             .add_document(doc)
-            .expect("Error while adding document.");        
+            .expect("Error while adding document.");
     }
 
     pub fn delete(&mut self, data: T) {
         self.create_index_writer();
-        self.index_writer.as_ref().unwrap().delete_term(data.get_id_term());
+        self.index_writer
+            .as_ref()
+            .unwrap()
+            .delete_term(data.get_id_term());
     }
 
     pub fn delete_using_term(&mut self, term: tantivy::Term) {
@@ -77,26 +78,42 @@ impl<T: Indexable> Indexer<T> {
 
     pub fn commit(&mut self) {
         if self.index_writer.is_some() {
-            self.index_writer.as_mut().unwrap().commit().expect("Error while commiting index data.");
+            self.index_writer
+                .as_mut()
+                .unwrap()
+                .commit()
+                .expect("Error while commiting index data.");
         }
 
         self.index_writer = None;
     }
 
-    pub fn search(&self, field_name: &str, query: &str, result_count: usize) -> Vec<T> {
+    pub fn search(
+        &self,
+        filter: HashMap<&str, &str>,
+        field_name: &str,
+        query: &str,
+        result_count: usize,
+    ) -> Vec<T> {
         let field = self
             .schema
             .get_field(field_name)
             .expect("Field with provided field name does not exsit in schema.");
 
-        let query = QueryParser::for_index(&self.index, vec![field])
+        let search_query = QueryParser::for_index(&self.index, vec![field])
             .parse_query(query)
             .expect("Error while parsing query.");
 
-        self._search(&query, result_count)
+        self._search(filter, search_query, result_count)
     }
 
-    pub fn fuzzy_search(&self, field_name: &str, query: &str, result_count: usize) -> Vec<T> {
+    pub fn fuzzy_search(
+        &self,
+        filter: HashMap<&str, &str>,
+        field_name: &str,
+        query: &str,
+        result_count: usize,
+    ) -> Vec<T> {
         let field = self
             .schema
             .get_field(field_name)
@@ -105,10 +122,16 @@ impl<T: Indexable> Indexer<T> {
         let term: Term = Term::from_field_text(field, query);
         let query = FuzzyTermQuery::new(term, 2, true);
 
-        self._search(&query, result_count)
+        self._search(filter, Box::new(query), result_count)
     }
 
-    pub fn regex_search(&self, field_name: &str, query: &str, result_count: usize) -> Vec<T> {
+    pub fn regex_search(
+        &self,
+        filter: HashMap<&str, &str>,
+        field_name: &str,
+        query: &str,
+        result_count: usize,
+    ) -> Vec<T> {
         let field = self
             .schema
             .get_field(field_name)
@@ -117,12 +140,18 @@ impl<T: Indexable> Indexer<T> {
         let query =
             RegexQuery::from_pattern(query, field).expect("Error while building regex query.");
 
-        self._search(&query, result_count)
+        self._search(filter, Box::new(query), result_count)
     }
 
     ///Uses regex pattern matching query along with fuzzy search.
     ///Maybe slow.
-    pub fn hybrid_search(&self, field_name: &str, query: &str, result_count: usize) -> Vec<T> {
+    pub fn hybrid_search(
+        &self,
+        filter: HashMap<&str, &str>,
+        field_name: &str,
+        query: &str,
+        result_count: usize,
+    ) -> Vec<T> {
         let field = self
             .schema
             .get_field(field_name)
@@ -144,19 +173,6 @@ impl<T: Indexable> Indexer<T> {
             })
             .collect();
 
-        // let regex_queries: Vec<(Occur, Box<dyn Query>)> = query.to_lowercase()
-        //     .split(" ")
-        //     .map(|q| {
-        //         (
-        //             Occur::Should,
-        //             Box::new(
-        //                 RegexQuery::from_pattern(&format!("{}.*", q), field)
-        //                     .expect("Error while building regex query."),
-        //             ) as Box<dyn Query>,
-        //         )
-        //     })
-        //     .collect();
-
         let phrase_prefix_query: (Occur, Box<dyn Query>) = (
             Occur::Should,
             Box::new(PhrasePrefixQuery::new(terms)) as Box<dyn Query>,
@@ -164,13 +180,50 @@ impl<T: Indexable> Indexer<T> {
 
         let mut boolean_quries: Vec<(Occur, Box<dyn Query>)> = vec![phrase_prefix_query];
         boolean_quries.extend(fuzzy_queries);
-        //boolean_quries.extend(regex_queries);
 
         let query = BooleanQuery::new(boolean_quries);
-        self._search(&query, result_count)
+        self._search(filter, Box::new(query), result_count)
     }
 
-    fn _search(&self, query: &dyn Query, result_count: usize) -> Vec<T> {
+    fn filtered_query(
+        &self,
+        filter: HashMap<&str, &str>,
+        query: Box<dyn Query>,
+    ) -> Box<dyn Query> {
+        let filter_query = if filter.is_empty() {
+            None
+        } else {
+            let filter_queries: Vec<(Occur, Box<dyn Query>)> = filter
+                .iter()
+                .map(|x| {
+                    let field = self.schema.get_field(x.0).expect(&format!(
+                        "Field with provided field name `{}` does not exists in schema.",
+                        x.0
+                    ));
+                    let filter_query = QueryParser::for_index(&self.index, vec![field])
+                        .parse_query(x.1)
+                        .expect("Error while parsing query.");
+                    (Occur::Must, filter_query)
+                })
+                .collect();
+            Some(filter_queries)
+        };
+
+        match filter_query {
+            Some(mut x) => {
+                x.push((Occur::Should, Box::new(query)));
+                Box::new(BooleanQuery::from(x))
+            }
+            None => query,
+        }
+    }
+
+    fn _search(
+        &self,
+        filter: HashMap<&str, &str>,
+        query: Box<dyn Query>,
+        result_count: usize,
+    ) -> Vec<T> {
         let reader = self
             .index
             .reader_builder()
@@ -179,8 +232,10 @@ impl<T: Indexable> Indexer<T> {
             .expect("Error while constructing reader for search operation.");
         let searcher = reader.searcher();
 
+        let query = self.filtered_query(filter, query);
+
         let top_docs = searcher
-            .search(query, &TopDocs::with_limit(result_count))
+            .search(&query, &TopDocs::with_limit(result_count))
             .expect("Error while performing search operation.");
 
         Self::docs_to_t(top_docs, &searcher)

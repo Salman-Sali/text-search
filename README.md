@@ -37,10 +37,10 @@ fn main() {
   }
   indexer.commit();
 
-  let basic_search_result: Vec<Book> = indexer.search("name", "Rust", 10);
+  let basic_search_result: Vec<Book> = indexer.search(HashMap::new(), "name", "Rust", 10);
 
-  let fuzzy_search_result: Vec<Book> = indexer.fuzzy_search("name", "Rosty", 10);
+  let fuzzy_search_result: Vec<Book> = indexer.fuzzy_search(HashMap::new(), "name", "Rosty", 10);
 
-  let regex_search_result: Vec<Book> = indexer.regex_query("name", "rustacea.*", 10);
+  let regex_search_result: Vec<Book> = indexer.regex_query(HashMap::new(), "name", "rustacea.*", 10);
 }
 ```
