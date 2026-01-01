@@ -184,13 +184,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "example"
-version = "0.1.0"
-dependencies = [
- "text-search",
-]
-
-[[package]]
 name = "fastdivide"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -832,7 +825,7 @@ dependencies = [
 
 [[package]]
 name = "text-search"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "tantivy",
  "text-search-core",

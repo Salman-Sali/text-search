@@ -1,6 +1,6 @@
 use text_search::Indexed;
 
-#[derive(Indexed, Clone)]
+#[derive(Indexed, Clone, Debug)]
 pub struct Book {
     //default is #[text_search(not_indexed, stored)]
 
@@ -9,7 +9,7 @@ pub struct Book {
     pub id: i32,
     #[text_search(indexed_text, stored)]
     pub name: String,
-    #[text_search(indexed_text, stored)]
+    #[text_search(indexed_string, stored)]
     pub author: String,
     #[text_search(indexed_text, stored)]
     pub description: String,

@@ -1,6 +1,6 @@
 [package]
 name = "text-search"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 description = "A simple easy to use plug and play wrapper around tantivy for simple search scenarios."
 repository = "https://github.com/Salman-Sali/text-search"
@@ -14,4 +14,4 @@ text-search-core = { version = "0.1.0", path = "text-search-core" }
 text-search-derive = { version = "0.1.0", path = "text-search-derive" }
 
 [workspace]
-members = [ "example" , "text-search-core", "text-search-derive"]
+members = [ "text-search-core", "text-search-derive"]

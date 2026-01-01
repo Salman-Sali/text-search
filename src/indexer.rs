@@ -71,6 +71,17 @@ impl<T: Indexable> Indexer<T> {
         self.index_writer.as_ref().unwrap().delete_term(term);
     }
 
+    pub fn delete_using_filters(&mut self, filters: HashMap<&str, &str>) {
+        self.create_index_writer();
+        let query = BooleanQuery::from(self.new_boolean_query_filters(filters));
+        println!("query : {:?}", query);
+        let _ = self
+            .index_writer
+            .as_ref()
+            .unwrap()
+            .delete_query(Box::new(query));
+    }
+
     pub fn update(&mut self, data: T) {
         self.delete(data.clone());
         self.index(data);
@@ -185,28 +196,11 @@ impl<T: Indexable> Indexer<T> {
         self._search(filter, Box::new(query), result_count)
     }
 
-    fn filtered_query(
-        &self,
-        filter: HashMap<&str, &str>,
-        query: Box<dyn Query>,
-    ) -> Box<dyn Query> {
-        let filter_query = if filter.is_empty() {
+    fn filter_query(&self, filters: HashMap<&str, &str>, query: Box<dyn Query>) -> Box<dyn Query> {
+        let filter_query = if filters.is_empty() {
             None
         } else {
-            let filter_queries: Vec<(Occur, Box<dyn Query>)> = filter
-                .iter()
-                .map(|x| {
-                    let field = self.schema.get_field(x.0).expect(&format!(
-                        "Field with provided field name `{}` does not exists in schema.",
-                        x.0
-                    ));
-                    let filter_query = QueryParser::for_index(&self.index, vec![field])
-                        .parse_query(x.1)
-                        .expect("Error while parsing query.");
-                    (Occur::Must, filter_query)
-                })
-                .collect();
-            Some(filter_queries)
+            Some(self.new_boolean_query_filters(filters))
         };
 
         match filter_query {
@@ -216,6 +210,27 @@ impl<T: Indexable> Indexer<T> {
             }
             None => query,
         }
+    }
+
+    fn new_boolean_query_filters(
+        &self,
+        filters: HashMap<&str, &str>,
+    ) -> Vec<(Occur, Box<dyn Query>)> {
+        filters
+            .iter()
+            .map(|x| {
+                let field = self.schema.get_field(x.0).expect(&format!(
+                    "Field with provided field name `{}` does not exists in schema.",
+                    x.0
+                ));
+                let phrase = format!("\"{}\"", x.1);
+
+                let filter_query = QueryParser::for_index(&self.index, vec![field])
+                    .parse_query(&phrase)
+                    .expect("Error while parsing query.");
+                (Occur::Must, filter_query)
+            })
+            .collect()
     }
 
     fn _search(
@@ -232,7 +247,7 @@ impl<T: Indexable> Indexer<T> {
             .expect("Error while constructing reader for search operation.");
         let searcher = reader.searcher();
 
-        let query = self.filtered_query(filter, query);
+        let query = self.filter_query(filter, query);
 
         let top_docs = searcher
             .search(&query, &TopDocs::with_limit(result_count))
