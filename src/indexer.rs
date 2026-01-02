@@ -74,7 +74,6 @@ impl<T: Indexable> Indexer<T> {
     pub fn delete_using_filters(&mut self, filters: HashMap<&str, &str>) {
         self.create_index_writer();
         let query = BooleanQuery::from(self.new_boolean_query_filters(filters));
-        println!("query : {:?}", query);
         let _ = self
             .index_writer
             .as_ref()
@@ -205,7 +204,7 @@ impl<T: Indexable> Indexer<T> {
 
         match filter_query {
             Some(mut x) => {
-                x.push((Occur::Should, Box::new(query)));
+                x.push((Occur::Must, Box::new(query)));
                 Box::new(BooleanQuery::from(x))
             }
             None => query,
