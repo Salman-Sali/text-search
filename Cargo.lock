@@ -825,7 +825,7 @@ dependencies = [
 
 [[package]]
 name = "text-search"
-version = "0.1.4"
+version = "0.1.6"
 dependencies = [
  "tantivy",
  "text-search-core",
@@ -834,7 +834,7 @@ dependencies = [
 
 [[package]]
 name = "text-search-core"
-version = "0.1.0"
+version = "0.1.6"
 dependencies = [
  "syn",
  "tantivy",
@@ -842,7 +842,7 @@ dependencies = [
 
 [[package]]
 name = "text-search-derive"
-version = "0.1.0"
+version = "0.1.6"
 dependencies = [
  "proc-macro2",
  "quote",

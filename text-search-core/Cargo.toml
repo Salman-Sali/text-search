@@ -1,6 +1,6 @@
 [package]
 name = "text-search-core"
-version = "0.1.0"
+version = "0.1.6"
 edition = "2024"
 description = "Core utils for the text-search crate."
 homepage = "https://github.com/Salman-Sali/text-search"

@@ -162,7 +162,7 @@ pub fn generate_field_info_temp_var_assignments(
             quote! {
                 doc
                     .get_all(#field)
-                    .filter_map(|value|tantivy::schema::Value::as_str(&value))
+                    .filter_map(|value| text_search::tantivy::schema::Value::as_str(&value))
                     .map(|s| s.to_string())
                     .collect();
             }
