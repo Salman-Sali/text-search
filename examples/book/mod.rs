@@ -14,6 +14,9 @@ pub struct Book {
     #[text_search(indexed_text, stored)]
     pub description: String,
     pub published_on: i32,
+
+    #[text_search(indexed_string, stored)]
+    pub tags: Vec<String>,
 }
 
 impl Book {
@@ -25,6 +28,7 @@ impl Book {
                 author: "Bogdan".to_string(),
                 description: "An introduction to Rust programming.".to_string(),
                 published_on: 2021,
+                tags: vec!["abc".into(), "xyz".into(), "123".into(), "234".into()],
             },
             Self {
                 id: 2,
@@ -32,6 +36,7 @@ impl Book {
                 author: "Bogdan".to_string(),
                 description: "An introduction to Rust programming.".to_string(),
                 published_on: 2021,
+                tags: vec!["abc".into()],
             },
             Self {
                 id: 3,
@@ -39,6 +44,7 @@ impl Book {
                 author: "Bogdan".to_string(),
                 description: "An introduction to Rust programming.".to_string(),
                 published_on: 2021,
+                tags: vec!["xyz".into()],
             },
             Self {
                 id: 4,
@@ -46,6 +52,7 @@ impl Book {
                 author: "Bogdan".to_string(),
                 description: "An introduction to Rust programming.".to_string(),
                 published_on: 2021,
+                tags: vec!["abc".into()],
             },
             Self {
                 id: 5,
@@ -53,6 +60,7 @@ impl Book {
                 author: "Tim McNamara".to_string(),
                 description: "A hands-on guide to systems programming with Rust.".to_string(),
                 published_on: 2020,
+                tags: vec!["abc".into()],
             },
             Self {
                 id: 6,
@@ -60,6 +68,7 @@ impl Book {
                 author: "Steve Klabnik and Carol Nichols".to_string(),
                 description: "The official book on Rust programming.".to_string(),
                 published_on: 2019,
+                tags: vec!["abc".into()],
             },
             Self {
                 id: 7,
@@ -67,6 +76,7 @@ impl Book {
                 author: "Jim Blandy and Jason Orendorff".to_string(),
                 description: "Comprehensive Rust programming coverage.".to_string(),
                 published_on: 2018,
+                tags: vec!["abc".into()],
             },
             Self {
                 id: 8,
@@ -74,6 +84,7 @@ impl Book {
                 author: "Jon Gjengset".to_string(),
                 description: "Intermediate to advanced concepts in Rust.".to_string(),
                 published_on: 2021,
+                tags: vec!["xyz".into()],
             },
         ]
     }

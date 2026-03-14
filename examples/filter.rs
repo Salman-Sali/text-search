@@ -16,9 +16,7 @@ fn main() {
     }
     indexer.commit();
 
-    let filter = HashMap::from([
-        ("author", "Bogdan")
-    ]);
+    let filter = HashMap::from([("tags", "xyz")]);
     let regex_search_result = indexer.hybrid_search(filter, "name", "Rust", 10);
     for book in regex_search_result {
         println!("{:?}", book);

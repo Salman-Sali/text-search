@@ -1,8 +1,11 @@
-use quote::{quote, ToTokens};
-use syn::{parse_str, Expr, Ident};
-use text_search_core::StructInfo; 
+use quote::{ToTokens, quote};
+use syn::{Expr, Ident, parse_str};
+use text_search_core::StructInfo;
 
-use crate::field_info::{generate_field_info_temp_var_assignments, generate_field_info_to_document, generate_field_info_token, generate_term_initialisation};
+use crate::field_info::{
+    generate_field_info_temp_var_assignments, generate_field_info_to_document,
+    generate_field_info_token, generate_term_initialisation,
+};
 
 pub fn impl_indexable_token(
     struct_name: Ident,
@@ -58,23 +61,23 @@ fn generate_as_document(struct_info: &StructInfo) -> proc_macro2::TokenStream {
             let schema = struct_info.generate_schema();
             let mut doc = text_search::tantivy::TantivyDocument::default();
             #field_tokens
-            doc            
+            doc
         }
     }
 }
-
 
 fn generate_from_document(struct_info: &StructInfo) -> proc_macro2::TokenStream {
     let struct_name = parse_str::<Expr>(&struct_info.struct_name).unwrap();
     let mut field_temp_var_assignments: proc_macro2::TokenStream = quote! {};
     let mut field_self_assignement: proc_macro2::TokenStream = quote! {};
-    
+
     for field in &struct_info.fields {
         generate_field_info_temp_var_assignments(field).to_tokens(&mut field_temp_var_assignments);
         let field_name = field.field_name.clone();
-        let field_value_var = parse_str::<Expr>((field_name.to_owned() + "_value").as_str()).unwrap();
+        let field_value_var =
+            parse_str::<Expr>((field_name.to_owned() + "_value").as_str()).unwrap();
         let field_name_var = parse_str::<Expr>(field_name.as_str()).unwrap();
-        quote!{#field_name_var: #field_value_var,}.to_tokens(&mut field_self_assignement);
+        quote! {#field_name_var: #field_value_var,}.to_tokens(&mut field_self_assignement);
     }
     quote! {
         fn from_doc(doc : text_search::tantivy::TantivyDocument) -> Self {
@@ -91,7 +94,8 @@ fn generate_from_document(struct_info: &StructInfo) -> proc_macro2::TokenStream 
 fn generate_get_id_term(struct_info: &StructInfo) -> proc_macro2::TokenStream {
     let struct_name = parse_str::<Expr>(&struct_info.struct_name).unwrap();
     let id_field_info = struct_info.get_id_field();
-    let term_initialisation: proc_macro2::TokenStream = generate_term_initialisation(&id_field_info, true);
+    let term_initialisation: proc_macro2::TokenStream =
+        generate_term_initialisation(&id_field_info, true);
     let field_name = id_field_info.field_name.clone();
     quote! {
         fn get_id_term(&self) -> text_search::tantivy::Term {
@@ -107,11 +111,13 @@ fn generate_get_term_from_id(struct_info: &StructInfo) -> proc_macro2::TokenStre
     let id_field_type = match id_field_info.field_type {
         text_search_core::FieldType::String => quote! { String },
         text_search_core::FieldType::I32 => quote! { i32 },
+        text_search_core::FieldType::VecString => quote! { Vec<String> },
         text_search_core::FieldType::Unhandled => panic!("unhandled field type."),
     };
     let id_field_name_expr = parse_str::<Expr>(&id_field_info.field_name).unwrap();
     let field_name = id_field_info.field_name.clone();
-    let term_initialisation: proc_macro2::TokenStream = generate_term_initialisation(&id_field_info, false);
+    let term_initialisation: proc_macro2::TokenStream =
+        generate_term_initialisation(&id_field_info, false);
     quote! {
         pub fn get_term_from_id(#id_field_name_expr: #id_field_type) -> text_search::tantivy::Term {
             use text_search::Indexable;

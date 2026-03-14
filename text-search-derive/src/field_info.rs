@@ -1,9 +1,8 @@
-
 use crate::context::Ctxt;
 
 use quote::quote;
-use syn::{parse_str, Expr, Field, Type};
-use text_search_core::{symbol::*, FieldInfo, FieldType, IndexType};
+use syn::{Expr, Field, Type, parse_str};
+use text_search_core::{FieldInfo, FieldType, IndexType, symbol::*};
 
 pub fn get_field_info(ctxt: &Ctxt, field: &Field) -> FieldInfo {
     let mut is_id: bool = false;
@@ -107,6 +106,7 @@ pub fn generate_field_info_token(field_info: &FieldInfo) -> proc_macro2::TokenSt
     let field_type_token = match field_info.field_type {
         FieldType::String => quote! {text_search::FieldType::String},
         FieldType::I32 => quote! {text_search::FieldType::I32},
+        FieldType::VecString => quote! {text_search::FieldType::VecString},
         FieldType::Unhandled => quote! {text_search::FieldType::Unhandled},
     };
 
@@ -123,6 +123,12 @@ pub fn generate_field_info_to_document(field_info: &FieldInfo) -> proc_macro2::T
             let #field_name = schema.get_field(#field_name_string).unwrap();
             doc.add_text(#field_name, &self.#field_name);
         },
+        FieldType::VecString => quote! {
+            let #field_name = schema.get_field(#field_name_string).unwrap();
+            for v in &self.#field_name {
+                doc.add_text(#field_name, v);
+            }
+        },
         FieldType::I32 => quote! {
             let #field_name = schema.get_field(#field_name_string).unwrap();
             doc.add_i64(#field_name, self.#field_name as i64);
@@ -131,34 +137,69 @@ pub fn generate_field_info_to_document(field_info: &FieldInfo) -> proc_macro2::T
     }
 }
 
-pub fn generate_field_info_temp_var_assignments(field_info: &FieldInfo) -> proc_macro2::TokenStream {
+pub fn generate_field_info_temp_var_assignments(
+    field_info: &FieldInfo,
+) -> proc_macro2::TokenStream {
     let field_name = &field_info.field_name;
     let field_name_value = format!("{}", field_name);
+    let field = parse_str::<Expr>(&field_name_value).unwrap();
     let field_id_var = parse_str::<Expr>((field_name.to_owned() + "_field_id").as_str()).unwrap();
-    let field_owned_value_var = parse_str::<Expr>((field_name.to_owned() + "_owned_value").as_str()).unwrap();
+    let field_owned_value_var =
+        parse_str::<Expr>((field_name.to_owned() + "_owned_value").as_str()).unwrap();
     let field_value_var = parse_str::<Expr>((field_name.to_owned() + "_value").as_str()).unwrap();
     let field_value_assignment = match field_info.field_type {
-        FieldType::String => quote! {if let text_search::tantivy::schema::OwnedValue::Str(s) = #field_owned_value_var { s } else { Default::default() };},
-        FieldType::I32 =>  quote! {if let text_search::tantivy::schema::OwnedValue::I64(i) = #field_owned_value_var { i as i32 } else { Default::default() };},
+        FieldType::String => {
+            quote! {
+                if let text_search::tantivy::schema::OwnedValue::Str(s) = #field_owned_value_var
+                {
+                    s
+                } else {
+                    Default::default()
+                };
+            }
+        }
+        FieldType::VecString => {
+            quote! {
+                doc
+                    .get_all(#field)
+                    .filter_map(|value|tantivy::schema::Value::as_str(&value))
+                    .map(|s| s.to_string())
+                    .collect();
+            }
+        }
+        FieldType::I32 => {
+            quote! {
+                if let text_search::tantivy::schema::OwnedValue::I64(i) = #field_owned_value_var
+                {
+                    i as i32
+                } else {
+                    Default::default()
+                };
+            }
+        }
         FieldType::Unhandled => panic!("Unhandled field type."),
     };
     quote! {
-        let #field_id_var =  schema.get_field(#field_name_value).unwrap().field_id();
+        let #field =  schema.get_field(#field_name_value).unwrap();
+        let #field_id_var =  #field.field_id();
         let #field_owned_value_var = doc.field_values().into_iter().filter(|x| x.field.field_id() == #field_id_var).next().unwrap().value.clone();
         let #field_value_var = #field_value_assignment
     }
 }
 
-pub fn generate_term_initialisation(field_info: &FieldInfo, include_self: bool) -> proc_macro2::TokenStream {
+pub fn generate_term_initialisation(
+    field_info: &FieldInfo,
+    include_self: bool,
+) -> proc_macro2::TokenStream {
     let field_name = parse_str::<Expr>(&{
         if include_self {
             let value = format!("self.{}", field_info.field_name.clone());
             value
         } else {
             field_info.field_name.clone()
-        }        
-    }).unwrap();
-    //let field_name = parse_str::<Expr>(&field_info.field_name).unwrap();
+        }
+    })
+    .unwrap();
     return match field_info.field_type {
         FieldType::String => quote! {
             return text_search::tantivy::Term::from_field_text(field, &#field_name);
@@ -167,5 +208,8 @@ pub fn generate_term_initialisation(field_info: &FieldInfo, include_self: bool) 
             return text_search::tantivy::Term::from_field_i64(field, #field_name as i64);
         },
         FieldType::Unhandled => panic!("Unhandled field type."),
+        _ => {
+            panic!("Cannot generate term initialization.");
+        }
     };
 }
