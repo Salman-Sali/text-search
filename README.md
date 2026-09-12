@@ -29,18 +29,20 @@ pub struct Book {
 }
 
 fn main() {
-  let mut indexer = Indexer::<Book>::new(Path::new("/path/to/your/dir"));
+  let mut index_writer = IndexWriter::<Book>::new(Path::new("/path/to/your/dir"), 50_000_000).unwrap();
   let books = Book::get_sample_books();
   
   for book in books {
-      indexer.index(book);        
+      index_writer.index(book);        
   }
-  indexer.commit();
+  let _ = index_writer.commit();
 
-  let basic_search_result: Vec<Book> = indexer.search(HashMap::new(), "name", "Rust", 10);
+  let index_reader = index_writer.create_index_reader().unwrap();
 
-  let fuzzy_search_result: Vec<Book> = indexer.fuzzy_search(HashMap::new(), "name", "Rosty", 10);
+  let basic_search_result: Vec<Book> = index_reader.search(HashMap::new(), "name", "Rust", 10);
 
-  let regex_search_result: Vec<Book> = indexer.regex_query(HashMap::new(), "name", "rustacea.*", 10);
+  let fuzzy_search_result: Vec<Book> = index_reader.fuzzy_search(HashMap::new(), "name", "Rosty", 10);
+
+  let regex_search_result: Vec<Book> = index_reader.regex_query(HashMap::new(), "name", "rustacea.*", 10);
 }
 ```

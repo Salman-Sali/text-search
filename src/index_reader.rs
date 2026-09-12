@@ -1,9 +1,10 @@
-use std::{collections::HashMap, fs, marker::PhantomData, path::Path};
+use tantivy::{IndexReader as TanvityIndexReader, directory::MmapDirectory};
+
+use std::{collections::HashMap, marker::PhantomData, path::Path};
 
 use tantivy::{
-    DocAddress, Index, IndexWriter, ReloadPolicy, Searcher, TantivyDocument, Term,
+    DocAddress, Index, ReloadPolicy, Searcher, TantivyDocument, Term,
     collector::TopDocs,
-    directory::MmapDirectory,
     query::{
         BooleanQuery, FuzzyTermQuery, Occur, PhrasePrefixQuery, Query, QueryParser, RegexQuery,
     },
@@ -11,91 +12,48 @@ use tantivy::{
 };
 use text_search_core::Indexable;
 
-pub struct Indexer<T: Indexable> {
+use crate::error::Error;
+
+#[derive(Clone)]
+pub struct IndexReader<T: Indexable> {
     index: Index,
     schema: Schema,
-    index_writer: Option<IndexWriter>,
+    reader: TanvityIndexReader,
     _marker: PhantomData<T>,
 }
 
-impl<T: Indexable> Indexer<T> {
-    pub fn new(path: &Path) -> Self {
+impl<T: Indexable> IndexReader<T> {
+    pub fn new(path: &Path) -> Result<Self, Error> {
         if !path.exists() {
-            let _ = fs::create_dir(path);
+            let _ = std::fs::create_dir(path);
         }
+        let dir = MmapDirectory::open(&path)?;
 
-        let dir = MmapDirectory::open(&path).expect("Error while opening directory");
         let schema = T::get_struct_info().generate_schema();
-        let index = Index::open_or_create(dir, schema.clone())
-            .expect("Error while opening or creating index. If schema has been updated, remove the old data.");
-
-        Self {
+        let index = Index::open_or_create(dir, schema.clone())?;
+        let reader = index
+            .reader_builder()
+            .reload_policy(ReloadPolicy::OnCommitWithDelay)
+            .try_into()?;
+        Ok(Self {
+            reader,
             index,
             schema,
-            index_writer: None,
             _marker: PhantomData,
-        }
+        })
     }
 
-    fn create_index_writer(&mut self) {
-        if self.index_writer.is_none() {
-            self.index_writer = Some(
-                self.index
-                    .writer(50_000_000)
-                    .expect("Error while creating index writer."),
-            );
-        }
-    }
-
-    pub fn index(&mut self, data: T) {
-        self.create_index_writer();
-
-        let doc = data.as_document();
-        self.index_writer
-            .as_ref()
-            .unwrap()
-            .add_document(doc)
-            .expect("Error while adding document.");
-    }
-
-    pub fn delete(&mut self, data: T) {
-        self.create_index_writer();
-        self.index_writer
-            .as_ref()
-            .unwrap()
-            .delete_term(data.get_id_term());
-    }
-
-    pub fn delete_using_term(&mut self, term: tantivy::Term) {
-        self.create_index_writer();
-        self.index_writer.as_ref().unwrap().delete_term(term);
-    }
-
-    pub fn delete_using_filters(&mut self, filters: HashMap<&str, &str>) {
-        self.create_index_writer();
-        let query = BooleanQuery::from(self.new_boolean_query_filters(filters));
-        let _ = self
-            .index_writer
-            .as_ref()
-            .unwrap()
-            .delete_query(Box::new(query));
-    }
-
-    pub fn update(&mut self, data: T) {
-        self.delete(data.clone());
-        self.index(data);
-    }
-
-    pub fn commit(&mut self) {
-        if self.index_writer.is_some() {
-            self.index_writer
-                .as_mut()
-                .unwrap()
-                .commit()
-                .expect("Error while commiting index data.");
-        }
-
-        self.index_writer = None;
+    pub(crate) fn from_index_writer(index: Index, schema: Schema) -> Result<Self, Error> {
+        let reader = index
+            .reader_builder()
+            .reload_policy(ReloadPolicy::OnCommitWithDelay)
+            .try_into()?;
+        Ok(Self {
+            reader,
+            index,
+            schema,
+            _marker: PhantomData,
+        })
     }
 
     pub fn search(
@@ -238,13 +196,7 @@ impl<T: Indexable> Indexer<T> {
         query: Box<dyn Query>,
         result_count: usize,
     ) -> Vec<T> {
-        let reader = self
-            .index
-            .reader_builder()
-            .reload_policy(ReloadPolicy::OnCommitWithDelay)
-            .try_into()
-            .expect("Error while constructing reader for search operation.");
-        let searcher = reader.searcher();
+        let searcher = self.reader.searcher();
 
         let query = self.filter_query(filter, query);
 
