@@ -39,10 +39,10 @@ fn main() {
 
   let index_reader = index_writer.create_index_reader().unwrap();
 
-  let basic_search_result: Vec<Book> = index_reader.search(HashMap::new(), "name", "Rust", 10);
+  let basic_search_result: Vec<Book> = index_reader.search(HashMap::new(), "name", "Rust", 1, 10).unwrap().data;
 
-  let fuzzy_search_result: Vec<Book> = index_reader.fuzzy_search(HashMap::new(), "name", "Rosty", 10);
+  let fuzzy_search_result: Vec<Book> = index_reader.fuzzy_search(HashMap::new(), "name", "Rosty", 1, 10).unwrap().data;
 
-  let regex_search_result: Vec<Book> = index_reader.regex_query(HashMap::new(), "name", "rustacea.*", 10);
+  let regex_search_result: Vec<Book> = index_reader.regex_query(HashMap::new(), "name", "rustacea.*", 1, 10).unwrap().data;
 }
 ```

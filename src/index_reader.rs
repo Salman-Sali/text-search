@@ -1,4 +1,4 @@
-use tantivy::{IndexReader as TanvityIndexReader, directory::MmapDirectory};
+use tantivy::{IndexReader as TanvityIndexReader, collector::Count, directory::MmapDirectory};
 
 use std::{collections::HashMap, marker::PhantomData, path::Path};
 
@@ -12,7 +12,7 @@ use tantivy::{
 };
 use text_search_core::Indexable;
 
-use crate::error::Error;
+use crate::{error::Error, paginated_result::PaginatedResult};
 
 #[derive(Clone)]
 pub struct IndexReader<T: Indexable> {
@@ -61,8 +61,9 @@ impl<T: Indexable> IndexReader<T> {
         filter: HashMap<&str, &str>,
         field_name: &str,
         query: &str,
-        result_count: usize,
-    ) -> Vec<T> {
+        page: usize,
+        take: usize,
+    ) -> Result<PaginatedResult<T>, Error> {
         let field = self
             .schema
             .get_field(field_name)
@@ -72,7 +73,7 @@ impl<T: Indexable> IndexReader<T> {
             .parse_query(query)
             .expect("Error while parsing query.");
 
-        self._search(filter, search_query, result_count)
+        self._search(filter, search_query, page, take)
     }
 
     pub fn fuzzy_search(
@@ -80,8 +81,9 @@ impl<T: Indexable> IndexReader<T> {
         filter: HashMap<&str, &str>,
         field_name: &str,
         query: &str,
-        result_count: usize,
-    ) -> Vec<T> {
+        page: usize,
+        take: usize,
+    ) -> Result<PaginatedResult<T>, Error> {
         let field = self
             .schema
             .get_field(field_name)
@@ -90,7 +92,7 @@ impl<T: Indexable> IndexReader<T> {
         let term: Term = Term::from_field_text(field, query);
         let query = FuzzyTermQuery::new(term, 2, true);
 
-        self._search(filter, Box::new(query), result_count)
+        self._search(filter, Box::new(query), page, take)
     }
 
     pub fn regex_search(
@@ -98,8 +100,9 @@ impl<T: Indexable> IndexReader<T> {
         filter: HashMap<&str, &str>,
         field_name: &str,
         query: &str,
-        result_count: usize,
-    ) -> Vec<T> {
+        page: usize,
+        take: usize,
+    ) -> Result<PaginatedResult<T>, Error> {
         let field = self
             .schema
             .get_field(field_name)
@@ -108,7 +111,7 @@ impl<T: Indexable> IndexReader<T> {
         let query =
             RegexQuery::from_pattern(query, field).expect("Error while building regex query.");
 
-        self._search(filter, Box::new(query), result_count)
+        self._search(filter, Box::new(query), page, take)
     }
 
     ///Uses regex pattern matching query along with fuzzy search.
@@ -118,8 +121,9 @@ impl<T: Indexable> IndexReader<T> {
         filter: HashMap<&str, &str>,
         field_name: &str,
         query: &str,
-        result_count: usize,
-    ) -> Vec<T> {
+        page: usize,
+        take: usize,
+    ) -> Result<PaginatedResult<T>, Error> {
         let field = self
             .schema
             .get_field(field_name)
@@ -150,7 +154,7 @@ impl<T: Indexable> IndexReader<T> {
         boolean_quries.extend(fuzzy_queries);
 
         let query = BooleanQuery::new(boolean_quries);
-        self._search(filter, Box::new(query), result_count)
+        self._search(filter, Box::new(query), page, take)
     }
 
     fn filter_query(&self, filters: HashMap<&str, &str>, query: Box<dyn Query>) -> Box<dyn Query> {
@@ -194,17 +198,29 @@ impl<T: Indexable> IndexReader<T> {
         &self,
         filter: HashMap<&str, &str>,
         query: Box<dyn Query>,
-        result_count: usize,
-    ) -> Vec<T> {
+        page: usize,
+        take: usize,
+    ) -> Result<PaginatedResult<T>, Error> {
         let searcher = self.reader.searcher();
 
         let query = self.filter_query(filter, query);
 
+        let offset = (page - 1) * take;
+
         let top_docs = searcher
-            .search(&query, &TopDocs::with_limit(result_count))
+            .search(&query, &TopDocs::with_limit(take).and_offset(offset))
             .expect("Error while performing search operation.");
 
-        Self::docs_to_t(top_docs, &searcher)
+        let total = searcher.search(&query, &Count)?;
+
+        let total_pages = if total == 0 {
+            0
+        } else {
+            (total + take - 1) / take
+        };
+
+        let data = Self::docs_to_t(top_docs, &searcher);
+        return Ok(PaginatedResult::new(data, page, total_pages));
     }
 
     fn docs_to_t(top_docs: Vec<(f32, DocAddress)>, searcher: &Searcher) -> Vec<T> {

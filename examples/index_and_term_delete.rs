@@ -19,8 +19,10 @@ fn main() {
     let index_reader = index_writer.create_index_reader().unwrap();
 
     println!("Before deleting");
-    let regex_search_result = index_reader.hybrid_search(HashMap::new(), "name", "Rust", 10);
-    for book in regex_search_result {
+    let regex_search_result = index_reader
+        .hybrid_search(HashMap::new(), "name", "Rust", 1, 10)
+        .unwrap();
+    for book in regex_search_result.data {
         println!("{:?}", book);
     }
 
@@ -34,8 +36,10 @@ fn main() {
     index_writer.commit().unwrap();
 
     println!("After deleting");
-    let regex_search_result = index_reader.hybrid_search(HashMap::new(), "name", "Rust", 10);
-    for book in regex_search_result {
+    let regex_search_result = index_reader
+        .hybrid_search(HashMap::new(), "name", "Rust", 1, 10)
+        .unwrap();
+    for book in regex_search_result.data {
         println!("{:?}", book);
     }
 }
