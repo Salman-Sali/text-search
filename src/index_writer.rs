@@ -1,18 +1,13 @@
-use std::{collections::HashMap, fs, marker::PhantomData, path::Path};
+use std::{fs, marker::PhantomData, path::Path};
 
-use tantivy::{
-    Index, IndexWriter as TantivyIndexWriter,
-    directory::MmapDirectory,
-    query::{BooleanQuery, Occur, Query, QueryParser},
-    schema::Schema,
-};
-use text_search_core::Indexable;
+use tantivy::{Index, IndexWriter as TantivyIndexWriter, directory::MmapDirectory};
+use text_search_core::{Filter, Indexable};
 
-use crate::{IndexReader, error::Error};
+use crate::{IndexReader, error::Error, index_reader::filter_to_query};
 
 pub struct IndexWriter<T: Indexable> {
     index: Index,
-    schema: Schema,
+    schema: tantivy::schema::Schema,
     index_writer: TantivyIndexWriter,
     _marker: PhantomData<T>,
 }
@@ -52,30 +47,9 @@ impl<T: Indexable> IndexWriter<T> {
         self.index_writer.delete_term(term);
     }
 
-    fn new_boolean_query_filters(
-        &self,
-        filters: HashMap<&str, &str>,
-    ) -> Vec<(Occur, Box<dyn Query>)> {
-        filters
-            .iter()
-            .map(|x| {
-                let field = self.schema.get_field(x.0).expect(&format!(
-                    "Field with provided field name `{}` does not exists in schema.",
-                    x.0
-                ));
-                let phrase = format!("\"{}\"", x.1);
-
-                let filter_query = QueryParser::for_index(&self.index, vec![field])
-                    .parse_query(&phrase)
-                    .expect("Error while parsing query.");
-                (Occur::Must, filter_query)
-            })
-            .collect()
-    }
-
-    pub fn delete_using_filters(&self, filters: HashMap<&str, &str>) {
-        let query = BooleanQuery::from(self.new_boolean_query_filters(filters));
-        let _ = self.index_writer.delete_query(Box::new(query));
+    pub fn delete_by_filter(&self, filter: &Filter) {
+        let query = filter_to_query(filter, &self.schema, &self.index);
+        let _ = self.index_writer.delete_query(query);
     }
 
     pub fn put(&self, data: T) {
@@ -85,7 +59,7 @@ impl<T: Indexable> IndexWriter<T> {
 
     pub fn commit(&mut self) -> Result<(), Error> {
         self.index_writer.commit()?;
-        return Ok(());
+        Ok(())
     }
 
     pub fn create_index_reader(&mut self) -> Result<IndexReader<T>, Error> {

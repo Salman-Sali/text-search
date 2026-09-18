@@ -1,12 +1,11 @@
-use std::{collections::HashMap, fs, path::Path};
-
 use book::Book;
-use text_search::IndexWriter;
+use std::{fs, path::Path};
+use text_search::{IndexWriter, SearchQuery};
 
 mod book;
 
 fn main() {
-    let path = "/home/salman/text-search-test";
+    let path = "/tmp/text-search-test";
     let _ = fs::remove_dir_all(&path);
     let _ = fs::create_dir(&path);
     let mut index_writer = IndexWriter::<Book>::new(Path::new(path), 50_000_000).unwrap();
@@ -18,11 +17,13 @@ fn main() {
 
     let index_reader = index_writer.create_index_reader().unwrap();
 
-    let filter = HashMap::from([("tags", "xyz")]);
-    let regex_search_result = index_reader
-        .hybrid_search(filter, "name", "Rust", 1, 10)
-        .unwrap();
-    for book in regex_search_result.data {
+    let query = SearchQuery::new(Book::name, "Rust")
+        .with_filter(Book::tags.eq("xyz"))
+        .page(1)
+        .per_page(10);
+
+    let result = index_reader.hybrid_search(&query).unwrap();
+    for book in result.data {
         println!("{:?}", book);
     }
 }

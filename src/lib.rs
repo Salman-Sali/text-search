@@ -13,4 +13,5 @@ pub use text_search_core::IndexFieldVec;
 pub use text_search_core::IndexType;
 pub use text_search_core::Indexable;
 pub use text_search_core::StructInfo;
+pub use text_search_core::{FieldRef, Filter, FilterOp, FilterValue, SearchQuery};
 pub use text_search_derive::Indexed;

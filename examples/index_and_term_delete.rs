@@ -1,12 +1,11 @@
-use std::{collections::HashMap, fs, path::Path};
-
 use book::Book;
-use text_search::{IndexWriter, Indexable, tantivy::Term};
+use std::{fs, path::Path};
+use text_search::{IndexWriter, Indexable, SearchQuery, tantivy::Term};
 
 mod book;
 
 fn main() {
-    let path = "/home/salman/text-search-test";
+    let path = "/tmp/text-search-test";
     let _ = fs::remove_dir_all(&path);
     let _ = fs::create_dir(&path);
     let mut index_writer = IndexWriter::<Book>::new(Path::new(path), 50_000_000).unwrap();
@@ -19,9 +18,8 @@ fn main() {
     let index_reader = index_writer.create_index_reader().unwrap();
 
     println!("Before deleting");
-    let regex_search_result = index_reader
-        .hybrid_search(HashMap::new(), "name", "Rust", 1, 10)
-        .unwrap();
+    let query = SearchQuery::new(Book::name, "Rust").page(1).per_page(10);
+    let regex_search_result = index_reader.hybrid_search(&query).unwrap();
     for book in regex_search_result.data {
         println!("{:?}", book);
     }
@@ -35,9 +33,7 @@ fn main() {
     let _ = index_reader.reload();
 
     println!("After deleting");
-    let regex_search_result = index_reader
-        .hybrid_search(HashMap::new(), "name", "Rust", 1, 10)
-        .unwrap();
+    let regex_search_result = index_reader.hybrid_search(&query).unwrap();
     for book in regex_search_result.data {
         println!("{:?}", book);
     }

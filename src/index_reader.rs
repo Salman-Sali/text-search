@@ -1,16 +1,17 @@
 use tantivy::{IndexReader as TanvityIndexReader, collector::Count, directory::MmapDirectory};
 
-use std::{collections::HashMap, marker::PhantomData, path::Path};
+use std::{marker::PhantomData, ops::Bound, path::Path};
 
 use tantivy::{
-    DocAddress, Index, ReloadPolicy, Searcher, TantivyDocument, Term,
+    DocAddress, Index, ReloadPolicy, Searcher, TantivyDocument,
     collector::TopDocs,
     query::{
-        BooleanQuery, FuzzyTermQuery, Occur, PhrasePrefixQuery, Query, QueryParser, RegexQuery,
+        AllQuery, BooleanQuery, FuzzyTermQuery, Occur, PhrasePrefixQuery, Query, QueryParser,
+        RangeQuery, RegexQuery, TermQuery,
     },
-    schema::Schema,
+    schema::{FieldType, Schema},
 };
-use text_search_core::Indexable;
+use text_search_core::{Filter, FilterOp, FilterValue, Indexable, SearchQuery};
 
 use crate::{error::Error, paginated_result::PaginatedResult};
 
@@ -60,83 +61,71 @@ impl<T: Indexable> IndexReader<T> {
         Ok(self.reader.reload()?)
     }
 
-    pub fn search(
-        &self,
-        filter: HashMap<&str, &str>,
-        field_name: &str,
-        query: &str,
-        page: i64,
-        per_page: i64,
-    ) -> Result<PaginatedResult<T>, Error> {
+    pub fn search(&self, query: &SearchQuery) -> Result<PaginatedResult<T>, Error> {
         let field = self
             .schema
-            .get_field(field_name)
-            .expect("Field with provided field name does not exsit in schema.");
+            .get_field(query.field().name())
+            .expect("Field with provided field name does not exist in schema.");
 
         let search_query = QueryParser::for_index(&self.index, vec![field])
-            .parse_query(query)
+            .parse_query(query.query())
             .expect("Error while parsing query.");
 
-        self._search(filter, search_query, page, per_page)
+        self._search(
+            query.filter(),
+            search_query,
+            query.get_page(),
+            query.get_per_page(),
+        )
     }
 
-    pub fn fuzzy_search(
-        &self,
-        filter: HashMap<&str, &str>,
-        field_name: &str,
-        query: &str,
-        page: i64,
-        per_page: i64,
-    ) -> Result<PaginatedResult<T>, Error> {
+    pub fn fuzzy_search(&self, query: &SearchQuery) -> Result<PaginatedResult<T>, Error> {
         let field = self
             .schema
-            .get_field(field_name)
-            .expect("Field with provided field name does not exsit in schema.");
+            .get_field(query.field().name())
+            .expect("Field with provided field name does not exist in schema.");
 
-        let term: Term = Term::from_field_text(field, query);
-        let query = FuzzyTermQuery::new(term, 2, true);
+        let term: tantivy::Term = tantivy::Term::from_field_text(field, query.query());
+        let search_query = FuzzyTermQuery::new(term, 2, true);
 
-        self._search(filter, Box::new(query), page, per_page)
+        self._search(
+            query.filter(),
+            Box::new(search_query),
+            query.get_page(),
+            query.get_per_page(),
+        )
     }
 
-    pub fn regex_search(
-        &self,
-        filter: HashMap<&str, &str>,
-        field_name: &str,
-        query: &str,
-        page: i64,
-        per_page: i64,
-    ) -> Result<PaginatedResult<T>, Error> {
+    pub fn regex_search(&self, query: &SearchQuery) -> Result<PaginatedResult<T>, Error> {
         let field = self
             .schema
-            .get_field(field_name)
-            .expect("Field with provided field name does not exsit in schema.");
+            .get_field(query.field().name())
+            .expect("Field with provided field name does not exist in schema.");
 
-        let query =
-            RegexQuery::from_pattern(query, field).expect("Error while building regex query.");
+        let search_query = RegexQuery::from_pattern(query.query(), field)
+            .expect("Error while building regex query.");
 
-        self._search(filter, Box::new(query), page, per_page)
+        self._search(
+            query.filter(),
+            Box::new(search_query),
+            query.get_page(),
+            query.get_per_page(),
+        )
     }
 
     ///Uses regex pattern matching query along with fuzzy search.
     ///Maybe slow.
-    pub fn hybrid_search(
-        &self,
-        filter: HashMap<&str, &str>,
-        field_name: &str,
-        query: &str,
-        page: i64,
-        per_page: i64,
-    ) -> Result<PaginatedResult<T>, Error> {
+    pub fn hybrid_search(&self, query: &SearchQuery) -> Result<PaginatedResult<T>, Error> {
         let field = self
             .schema
-            .get_field(field_name)
-            .expect("Field with provided field name does not exsit in schema.");
+            .get_field(query.field().name())
+            .expect("Field with provided field name does not exist in schema.");
 
-        let terms: Vec<Term> = query
+        let terms: Vec<tantivy::Term> = query
+            .query()
             .to_lowercase()
-            .split(" ")
-            .map(|term| Term::from_field_text(field, term))
+            .split(' ')
+            .map(|term| tantivy::Term::from_field_text(field, term))
             .collect();
 
         let fuzzy_queries: Vec<(Occur, Box<dyn Query>)> = terms
@@ -157,57 +146,164 @@ impl<T: Indexable> IndexReader<T> {
         let mut boolean_quries: Vec<(Occur, Box<dyn Query>)> = vec![phrase_prefix_query];
         boolean_quries.extend(fuzzy_queries);
 
-        let query = BooleanQuery::new(boolean_quries);
-        self._search(filter, Box::new(query), page, per_page)
+        let search_query = BooleanQuery::new(boolean_quries);
+        self._search(
+            query.filter(),
+            Box::new(search_query),
+            query.get_page(),
+            query.get_per_page(),
+        )
     }
 
-    fn filter_query(&self, filters: HashMap<&str, &str>, query: Box<dyn Query>) -> Box<dyn Query> {
-        let filter_query = if filters.is_empty() {
-            None
-        } else {
-            Some(self.new_boolean_query_filters(filters))
-        };
+    fn apply_filter(
+        &self,
+        filter: Option<&Filter>,
+        search_query: Box<dyn Query>,
+    ) -> Box<dyn Query> {
+        let filter_query = filter.map(|f| self.filter_to_query(f));
 
         match filter_query {
-            Some(mut x) => {
-                x.push((Occur::Must, Box::new(query)));
-                Box::new(BooleanQuery::from(x))
+            Some(mut queries) => {
+                queries.push((Occur::Must, search_query));
+                Box::new(BooleanQuery::from(queries))
             }
-            None => query,
+            None => search_query,
         }
     }
 
-    fn new_boolean_query_filters(
-        &self,
-        filters: HashMap<&str, &str>,
-    ) -> Vec<(Occur, Box<dyn Query>)> {
-        filters
-            .iter()
-            .map(|x| {
-                let field = self.schema.get_field(x.0).expect(&format!(
-                    "Field with provided field name `{}` does not exists in schema.",
-                    x.0
+    fn filter_to_query(&self, filter: &Filter) -> Vec<(Occur, Box<dyn Query>)> {
+        match filter {
+            Filter::Condition {
+                field_name,
+                op,
+                value,
+            } => {
+                let field = self.schema.get_field(field_name).expect(&format!(
+                    "Field with provided field name `{}` does not exist in schema.",
+                    field_name
                 ));
-                let phrase = format!("\"{}\"", x.1);
 
-                let filter_query = QueryParser::for_index(&self.index, vec![field])
-                    .parse_query(&phrase)
-                    .expect("Error while parsing query.");
-                (Occur::Must, filter_query)
-            })
-            .collect()
+                // Get the field type from schema to determine the correct query type
+                let field_entry = self.schema.get_field_entry(field);
+                let tantivy_field_type = field_entry.field_type();
+
+                match op {
+                    FilterOp::Eq => {
+                        match value {
+                            FilterValue::Str(s) => {
+                                // For strings, use QueryParser with quoted string
+                                let phrase = format!("\"{}\"", s);
+                                let query = QueryParser::for_index(&self.index, vec![field])
+                                    .parse_query(&phrase)
+                                    .expect("Error while parsing query.");
+                                vec![(Occur::Must, query)]
+                            }
+                            _ => {
+                                // For non-string values, use TermQuery
+                                let term = value.to_term(field);
+                                let query =
+                                    TermQuery::new(term, tantivy::schema::IndexRecordOption::Basic);
+                                vec![(Occur::Must, Box::new(query))]
+                            }
+                        }
+                    }
+                    FilterOp::Ne => {
+                        let eq_query = self.filter_to_query(&Filter::Condition {
+                            field_name: field_name.clone(),
+                            op: FilterOp::Eq,
+                            value: value.clone(),
+                        });
+                        // For Ne, we need to use BooleanQuery with MustNot
+                        // Since filter_to_query returns a Vec, we take the first query
+                        let eq_query_boxed = eq_query
+                            .into_iter()
+                            .next()
+                            .map(|(_, q)| q)
+                            .unwrap_or_else(|| Box::new(AllQuery));
+                        vec![
+                            (Occur::MustNot, eq_query_boxed),
+                            (Occur::Must, Box::new(AllQuery)),
+                        ]
+                    }
+                    FilterOp::Ge => {
+                        let term = value.to_term(field);
+                        let value_type = get_field_value_type(tantivy_field_type);
+                        let query = RangeQuery::new_term_bounds(
+                            field_name.clone(),
+                            value_type,
+                            &Bound::Included(term),
+                            &Bound::Unbounded,
+                        );
+                        vec![(Occur::Must, Box::new(query))]
+                    }
+                    FilterOp::Gt => {
+                        let term = value.to_term(field);
+                        let value_type = get_field_value_type(tantivy_field_type);
+                        let query = RangeQuery::new_term_bounds(
+                            field_name.clone(),
+                            value_type,
+                            &Bound::Excluded(term),
+                            &Bound::Unbounded,
+                        );
+                        vec![(Occur::Must, Box::new(query))]
+                    }
+                    FilterOp::Le => {
+                        let term = value.to_term(field);
+                        let value_type = get_field_value_type(tantivy_field_type);
+                        let query = RangeQuery::new_term_bounds(
+                            field_name.clone(),
+                            value_type,
+                            &Bound::Unbounded,
+                            &Bound::Included(term),
+                        );
+                        vec![(Occur::Must, Box::new(query))]
+                    }
+                    FilterOp::Lt => {
+                        let term = value.to_term(field);
+                        let value_type = get_field_value_type(tantivy_field_type);
+                        let query = RangeQuery::new_term_bounds(
+                            field_name.clone(),
+                            value_type,
+                            &Bound::Unbounded,
+                            &Bound::Excluded(term),
+                        );
+                        vec![(Occur::Must, Box::new(query))]
+                    }
+                }
+            }
+            Filter::And(filters) => {
+                let mut all_queries: Vec<(Occur, Box<dyn Query>)> = Vec::new();
+                for f in filters {
+                    let sub_queries = self.filter_to_query(f);
+                    for (_, q) in sub_queries {
+                        all_queries.push((Occur::Must, q));
+                    }
+                }
+                all_queries
+            }
+            Filter::Or(filters) => {
+                let mut all_queries: Vec<(Occur, Box<dyn Query>)> = Vec::new();
+                for f in filters {
+                    let sub_queries = self.filter_to_query(f);
+                    for (_, q) in sub_queries {
+                        all_queries.push((Occur::Should, q));
+                    }
+                }
+                all_queries
+            }
+        }
     }
 
     fn _search(
         &self,
-        filter: HashMap<&str, &str>,
+        filter: Option<&Filter>,
         query: Box<dyn Query>,
         page: i64,
         per_page: i64,
     ) -> Result<PaginatedResult<T>, Error> {
         let searcher = self.reader.searcher();
 
-        let query = self.filter_query(filter, query);
+        let query = self.apply_filter(filter, query);
 
         let offset = (page - 1) * per_page;
 
@@ -227,12 +323,12 @@ impl<T: Indexable> IndexReader<T> {
         };
 
         let data = Self::docs_to_t(top_docs, &searcher);
-        return Ok(PaginatedResult::new(
+        Ok(PaginatedResult::new(
             data,
             page,
             total_items as i64,
             total_pages,
-        ));
+        ))
     }
 
     fn docs_to_t(top_docs: Vec<(f32, DocAddress)>, searcher: &Searcher) -> Vec<T> {
@@ -244,5 +340,131 @@ impl<T: Indexable> IndexReader<T> {
             result.push(T::from_doc(doc));
         }
         result
+    }
+}
+
+/// Get the value type for a field from its FieldType
+fn get_field_value_type(field_type: &FieldType) -> tantivy::schema::Type {
+    use tantivy::schema::Type;
+
+    match field_type {
+        FieldType::Str(_) => Type::Str,
+        FieldType::U64(_) => Type::U64,
+        FieldType::I64(_) => Type::I64,
+        FieldType::F64(_) => Type::F64,
+        FieldType::Bool(_) => Type::Bool,
+        FieldType::Date(_) => Type::Date,
+        _ => Type::Str, // Default to string for unknown types
+    }
+}
+
+/// Convert a Filter to a tantivy query. This is a helper function that can be used
+/// by both IndexReader and IndexWriter.
+pub(crate) fn filter_to_query(filter: &Filter, schema: &Schema, index: &Index) -> Box<dyn Query> {
+    match filter {
+        Filter::Condition {
+            field_name,
+            op,
+            value,
+        } => {
+            let field = schema.get_field(field_name).expect(&format!(
+                "Field with provided field name `{}` does not exist in schema.",
+                field_name
+            ));
+
+            // Get the field type from schema to determine the correct query type
+            let field_entry = schema.get_field_entry(field);
+            let tantivy_field_type = field_entry.field_type();
+            let value_type = get_field_value_type(tantivy_field_type);
+
+            match op {
+                FilterOp::Eq => {
+                    match value {
+                        FilterValue::Str(s) => {
+                            // For strings, use QueryParser with quoted string
+                            let phrase = format!("\"{}\"", s);
+                            let query = QueryParser::for_index(index, vec![field])
+                                .parse_query(&phrase)
+                                .expect("Error while parsing query.");
+                            query
+                        }
+                        _ => {
+                            // For non-string values, use TermQuery
+                            let term = value.to_term(field);
+                            Box::new(TermQuery::new(
+                                term,
+                                tantivy::schema::IndexRecordOption::Basic,
+                            ))
+                        }
+                    }
+                }
+                FilterOp::Ne => {
+                    // Get the eq query and wrap in BooleanQuery with MustNot
+                    let eq_query = filter_to_query(
+                        &Filter::Condition {
+                            field_name: field_name.clone(),
+                            op: FilterOp::Eq,
+                            value: value.clone(),
+                        },
+                        schema,
+                        index,
+                    );
+                    Box::new(BooleanQuery::new(vec![
+                        (Occur::MustNot, eq_query),
+                        (Occur::Must, Box::new(AllQuery)),
+                    ]))
+                }
+                FilterOp::Ge => {
+                    let term = value.to_term(field);
+                    Box::new(RangeQuery::new_term_bounds(
+                        field_name.clone(),
+                        value_type,
+                        &Bound::Included(term),
+                        &Bound::Unbounded,
+                    ))
+                }
+                FilterOp::Gt => {
+                    let term = value.to_term(field);
+                    Box::new(RangeQuery::new_term_bounds(
+                        field_name.clone(),
+                        value_type,
+                        &Bound::Excluded(term),
+                        &Bound::Unbounded,
+                    ))
+                }
+                FilterOp::Le => {
+                    let term = value.to_term(field);
+                    Box::new(RangeQuery::new_term_bounds(
+                        field_name.clone(),
+                        value_type,
+                        &Bound::Unbounded,
+                        &Bound::Included(term),
+                    ))
+                }
+                FilterOp::Lt => {
+                    let term = value.to_term(field);
+                    Box::new(RangeQuery::new_term_bounds(
+                        field_name.clone(),
+                        value_type,
+                        &Bound::Unbounded,
+                        &Bound::Excluded(term),
+                    ))
+                }
+            }
+        }
+        Filter::And(filters) => {
+            let mut queries: Vec<(Occur, Box<dyn Query>)> = Vec::new();
+            for f in filters {
+                queries.push((Occur::Must, filter_to_query(f, schema, index)));
+            }
+            Box::new(BooleanQuery::new(queries))
+        }
+        Filter::Or(filters) => {
+            let mut queries: Vec<(Occur, Box<dyn Query>)> = Vec::new();
+            for f in filters {
+                queries.push((Occur::Should, filter_to_query(f, schema, index)));
+            }
+            Box::new(BooleanQuery::new(queries))
+        }
     }
 }

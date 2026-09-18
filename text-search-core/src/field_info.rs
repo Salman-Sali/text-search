@@ -1,5 +1,6 @@
 use crate::index_type::IndexType;
 
+#[derive(Debug)]
 pub struct FieldInfo {
     pub is_id: bool,
     pub field_name: String,

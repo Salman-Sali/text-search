@@ -15,6 +15,7 @@ pub fn impl_indexable_token(
     let get_term_from_id = generate_get_term_from_id(derive_fields);
     let generate_schema = generate_schema_fn(derive_fields);
     let get_struct_info = generate_get_struct_info_token(&struct_name, derive_fields);
+    let field_ref_impl = generate_field_ref_impls(&struct_name, derive_fields);
 
     quote! {
         impl text_search::Indexable for #struct_name {
@@ -27,6 +28,31 @@ pub fn impl_indexable_token(
 
         impl #struct_name {
             #get_term_from_id
+        }
+
+        #field_ref_impl
+    }
+}
+
+fn generate_field_ref_impls(
+    struct_name: &Ident,
+    derive_fields: &[DeriveFieldInfo],
+) -> proc_macro2::TokenStream {
+    let field_refs: Vec<proc_macro2::TokenStream> = derive_fields
+        .iter()
+        .filter_map(|field| {
+            let field_name = field.info.field_name.as_str();
+            let field_ident = parse_str::<syn::Ident>(field_name).ok()?;
+            Some(quote! {
+                pub const #field_ident: text_search::FieldRef = text_search::FieldRef::new(#field_name);
+            })
+        })
+        .collect();
+
+    quote! {
+        #[allow(non_upper_case_globals)]
+        impl #struct_name {
+            #(#field_refs)*
         }
     }
 }

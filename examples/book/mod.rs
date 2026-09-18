@@ -13,6 +13,7 @@ pub struct Book {
     pub author: String,
     #[text_search(indexed_text, stored)]
     pub description: String,
+    #[text_search(indexed, stored)]
     pub published_on: i32,
 
     #[text_search(indexed_string, stored)]
@@ -20,6 +21,7 @@ pub struct Book {
 }
 
 impl Book {
+    #[allow(unused)]
     pub fn get_sample_books() -> Vec<Self> {
         vec![
             Self {
