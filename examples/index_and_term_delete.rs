@@ -26,14 +26,13 @@ fn main() {
         println!("{:?}", book);
     }
 
-    let field = Book::get_struct_info()
-        .generate_schema()
-        .get_field("author")
-        .unwrap();
+    let field = Book::generate_schema().get_field("author").unwrap();
 
     let term = Term::from_field_text(field, "Steve Klabnik and Carol Nichols");
     index_writer.delete_using_term(term);
     index_writer.commit().unwrap();
+
+    let _ = index_reader.reload();
 
     println!("After deleting");
     let regex_search_result = index_reader

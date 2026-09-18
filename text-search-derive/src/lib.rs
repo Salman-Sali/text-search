@@ -1,13 +1,12 @@
 mod context;
 mod field_info;
-mod struct_info;
 mod indexable;
+mod struct_info;
 use context::Ctxt;
 use field_info::get_field_info;
 
 use proc_macro::TokenStream;
-use syn::{parse_macro_input, Data, DeriveInput, Fields};
-use text_search_core::StructInfo; 
+use syn::{Data, DeriveInput, Fields, parse_macro_input};
 
 #[proc_macro_derive(Indexed, attributes(text_search))]
 pub fn text_search_macro(input: TokenStream) -> TokenStream {
@@ -25,12 +24,17 @@ pub fn text_search_macro(input: TokenStream) -> TokenStream {
         panic!("Only structs are supported.");
     };
 
-    let mut struct_info = StructInfo::new(name.to_string());
+    let mut derive_fields: Vec<field_info::DeriveFieldInfo> = Vec::new();
 
     for field in fields.named.iter() {
-        struct_info.add_field(get_field_info(&ctxt, field));
+        derive_fields.push(get_field_info(&ctxt, field));
     }
 
-    indexable::impl_indexable_token(name, struct_info).into()
-}
+    let impl_indexable = indexable::impl_indexable_token(
+        name.clone(),
+        text_search_core::StructInfo::new(name.to_string()),
+        &derive_fields,
+    );
 
+    impl_indexable.into()
+}

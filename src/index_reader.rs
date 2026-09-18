@@ -29,7 +29,7 @@ impl<T: Indexable> IndexReader<T> {
         }
         let dir = MmapDirectory::open(&path)?;
 
-        let schema = T::get_struct_info().generate_schema();
+        let schema = T::generate_schema();
         let index = Index::open_or_create(dir, schema.clone())?;
         let reader = index
             .reader_builder()
@@ -54,6 +54,10 @@ impl<T: Indexable> IndexReader<T> {
             schema,
             _marker: PhantomData,
         })
+    }
+
+    pub fn reload(&self) -> Result<(), Error> {
+        Ok(self.reader.reload()?)
     }
 
     pub fn search(

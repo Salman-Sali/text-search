@@ -2,26 +2,27 @@ use quote::{ToTokens, quote};
 use syn::{Expr, Ident, parse_str};
 use text_search_core::StructInfo;
 
-use crate::field_info::{
-    generate_field_info_temp_var_assignments, generate_field_info_to_document,
-    generate_field_info_token, generate_term_initialisation,
-};
+use crate::field_info::{DeriveFieldInfo, get_field_type_path, is_vec_field};
 
 pub fn impl_indexable_token(
     struct_name: Ident,
-    struct_info: StructInfo,
+    _struct_info: StructInfo,
+    derive_fields: &[DeriveFieldInfo],
 ) -> proc_macro2::TokenStream {
-    let get_struct_info = generate_get_struct_info_token(&struct_info);
-    let get_as_document = generate_as_document(&struct_info);
-    let get_from_doc = generate_from_document(&struct_info);
-    let get_id_term = generate_get_id_term(&struct_info);
-    let get_term_from_id = generate_get_term_from_id(&struct_info);
+    let get_as_document = generate_as_document(derive_fields);
+    let get_from_doc = generate_from_document(derive_fields);
+    let get_id_term = generate_get_id_term(derive_fields);
+    let get_term_from_id = generate_get_term_from_id(derive_fields);
+    let generate_schema = generate_schema_fn(derive_fields);
+    let get_struct_info = generate_get_struct_info_token(&struct_name, derive_fields);
+
     quote! {
         impl text_search::Indexable for #struct_name {
-            #get_struct_info
             #get_as_document
             #get_from_doc
             #get_id_term
+            #generate_schema
+            #get_struct_info
         }
 
         impl #struct_name {
@@ -30,35 +31,79 @@ pub fn impl_indexable_token(
     }
 }
 
-fn generate_get_struct_info_token(struct_info: &StructInfo) -> proc_macro2::TokenStream {
+fn generate_get_struct_info_token(
+    struct_name: &Ident,
+    derive_fields: &[DeriveFieldInfo],
+) -> proc_macro2::TokenStream {
+    let name = format!("{}", struct_name);
+
+    // Generate field info tokens for runtime introspection
     let mut field_tokens: proc_macro2::TokenStream = quote! {};
-    for field in &struct_info.fields {
-        generate_field_info_token(&field).to_tokens(&mut field_tokens);
+    for field in derive_fields {
+        let field_name = &field.info.field_name;
+        let is_id = field.info.is_id;
+        let stored = field.info.stored;
+        let index_type = match field.info.index_type {
+            text_search_core::IndexType::indexed_string => {
+                quote! { text_search::IndexType::indexed_string }
+            }
+            text_search_core::IndexType::indexed_text => {
+                quote! { text_search::IndexType::indexed_text }
+            }
+            text_search_core::IndexType::indexed => quote! { text_search::IndexType::indexed },
+            text_search_core::IndexType::not_indexed => {
+                quote! { text_search::IndexType::not_indexed }
+            }
+        };
+
+        let token = quote! {
+            text_search::FieldInfo {
+                is_id: #is_id,
+                field_name: #field_name.into(),
+                index_type: #index_type,
+                stored: #stored,
+            },
+        };
+        token.to_tokens(&mut field_tokens);
     }
 
-    let struct_name = format!("{}", struct_info.struct_name);
     quote! {
         fn get_struct_info() -> text_search::StructInfo {
             text_search::StructInfo {
-                struct_name: #struct_name.into(),
-                fields: vec![
-                    #field_tokens
-                ]
+                struct_name: #name.into(),
+                fields: vec![#field_tokens],
             }
         }
     }
 }
 
-fn generate_as_document(struct_info: &StructInfo) -> proc_macro2::TokenStream {
+fn generate_as_document(derive_fields: &[DeriveFieldInfo]) -> proc_macro2::TokenStream {
     let mut field_tokens: proc_macro2::TokenStream = quote! {};
-    for field in &struct_info.fields {
-        generate_field_info_to_document(field).to_tokens(&mut field_tokens);
+
+    for field in derive_fields {
+        let field_name_str = &field.info.field_name;
+        let field_name = parse_str::<Expr>(field_name_str).unwrap();
+        let is_vec = is_vec_field(field);
+
+        // For Vec<T>, use the full type path including Vec
+        let type_for_trait = if is_vec {
+            let inner = get_field_type_path(field);
+            quote! { Vec<#inner> }
+        } else {
+            let type_path = get_field_type_path(field);
+            quote! { #type_path }
+        };
+
+        let token = quote! {
+            let #field_name = schema.get_field(#field_name_str).unwrap();
+            <#type_for_trait as text_search::IndexField>::add_to_document(&self.#field_name, &mut doc, #field_name);
+        };
+        token.to_tokens(&mut field_tokens);
     }
-    let struct_name = parse_str::<Expr>(&struct_info.struct_name).unwrap();
+
     quote! {
         fn as_document(&self) -> text_search::tantivy::TantivyDocument {
-            let struct_info  = #struct_name::get_struct_info();
-            let schema = struct_info.generate_schema();
+            let schema = Self::generate_schema();
             let mut doc = text_search::tantivy::TantivyDocument::default();
             #field_tokens
             doc
@@ -66,63 +111,116 @@ fn generate_as_document(struct_info: &StructInfo) -> proc_macro2::TokenStream {
     }
 }
 
-fn generate_from_document(struct_info: &StructInfo) -> proc_macro2::TokenStream {
-    let struct_name = parse_str::<Expr>(&struct_info.struct_name).unwrap();
-    let mut field_temp_var_assignments: proc_macro2::TokenStream = quote! {};
-    let mut field_self_assignement: proc_macro2::TokenStream = quote! {};
+fn generate_from_document(derive_fields: &[DeriveFieldInfo]) -> proc_macro2::TokenStream {
+    let mut field_assignments: proc_macro2::TokenStream = quote! {};
 
-    for field in &struct_info.fields {
-        generate_field_info_temp_var_assignments(field).to_tokens(&mut field_temp_var_assignments);
-        let field_name = field.field_name.clone();
-        let field_value_var =
-            parse_str::<Expr>((field_name.to_owned() + "_value").as_str()).unwrap();
-        let field_name_var = parse_str::<Expr>(field_name.as_str()).unwrap();
-        quote! {#field_name_var: #field_value_var,}.to_tokens(&mut field_self_assignement);
+    for field in derive_fields {
+        let field_name_str = &field.info.field_name;
+        let field_name = parse_str::<Expr>(field_name_str).unwrap();
+        let type_path = get_field_type_path(field);
+        let is_vec = is_vec_field(field);
+
+        let assignment = if is_vec {
+            // For Vec<T>, use IndexFieldVec trait
+            quote! {
+                #field_name: {
+                    let field = schema.get_field(#field_name_str).unwrap();
+                    <Vec<#type_path> as text_search::IndexFieldVec<#type_path>>::from_doc_all(&doc, field)
+                },
+            }
+        } else {
+            // For single values
+            quote! {
+                #field_name: {
+                    let field = schema.get_field(#field_name_str).unwrap();
+                    <#type_path as text_search::IndexFieldSingle>::from_doc_single(&doc, field)
+                        .unwrap_or_default()
+                },
+            }
+        };
+        assignment.to_tokens(&mut field_assignments);
     }
+
     quote! {
         fn from_doc(doc : text_search::tantivy::TantivyDocument) -> Self {
-            let schema = #struct_name::get_struct_info().generate_schema();
-
-            #field_temp_var_assignments
+            let schema = Self::generate_schema();
             Self {
-                #field_self_assignement
+                #field_assignments
             }
         }
     }
 }
 
-fn generate_get_id_term(struct_info: &StructInfo) -> proc_macro2::TokenStream {
-    let struct_name = parse_str::<Expr>(&struct_info.struct_name).unwrap();
-    let id_field_info = struct_info.get_id_field();
-    let term_initialisation: proc_macro2::TokenStream =
-        generate_term_initialisation(&id_field_info, true);
-    let field_name = id_field_info.field_name.clone();
+fn generate_get_id_term(derive_fields: &[DeriveFieldInfo]) -> proc_macro2::TokenStream {
+    // Find the id field
+    let id_field = derive_fields
+        .iter()
+        .find(|f| f.info.is_id)
+        .expect("Missing id field");
+
+    let field_name_str = &id_field.info.field_name;
+    let field_name = parse_str::<Expr>(field_name_str).unwrap();
+    let type_path = get_field_type_path(id_field);
+
     quote! {
         fn get_id_term(&self) -> text_search::tantivy::Term {
-            let field = #struct_name::get_struct_info().generate_schema().get_field(#field_name).unwrap();
-            #term_initialisation
+            let field = Self::generate_schema().get_field(#field_name_str).unwrap();
+            <#type_path as text_search::IndexField>::to_term(&self.#field_name, field)
         }
     }
 }
 
-fn generate_get_term_from_id(struct_info: &StructInfo) -> proc_macro2::TokenStream {
-    let struct_name = parse_str::<Expr>(&struct_info.struct_name).unwrap();
-    let id_field_info = struct_info.get_id_field();
-    let id_field_type = match id_field_info.field_type {
-        text_search_core::FieldType::String => quote! { String },
-        text_search_core::FieldType::I32 => quote! { i32 },
-        text_search_core::FieldType::VecString => quote! { Vec<String> },
-        text_search_core::FieldType::Unhandled => panic!("unhandled field type."),
-    };
-    let id_field_name_expr = parse_str::<Expr>(&id_field_info.field_name).unwrap();
-    let field_name = id_field_info.field_name.clone();
-    let term_initialisation: proc_macro2::TokenStream =
-        generate_term_initialisation(&id_field_info, false);
+fn generate_get_term_from_id(derive_fields: &[DeriveFieldInfo]) -> proc_macro2::TokenStream {
+    // Find the id field
+    let id_field = derive_fields
+        .iter()
+        .find(|f| f.info.is_id)
+        .expect("Missing id field");
+
+    let field_name_str = &id_field.info.field_name;
+    let field_name_ident = parse_str::<syn::Ident>(field_name_str).unwrap();
+    let type_path = get_field_type_path(id_field);
+
     quote! {
-        pub fn get_term_from_id(#id_field_name_expr: #id_field_type) -> text_search::tantivy::Term {
-            use text_search::Indexable;
-            let field = #struct_name::get_struct_info().generate_schema().get_field(#field_name).unwrap();
-            #term_initialisation
+        pub fn get_term_from_id(#field_name_ident: #type_path) -> text_search::tantivy::Term {
+            let field = Self::generate_schema().get_field(#field_name_str).unwrap();
+            <#type_path as text_search::IndexField>::to_term(&#field_name_ident, field)
+        }
+    }
+}
+
+/// Generate the generate_schema function that creates tantivy schema at compile time
+fn generate_schema_fn(derive_fields: &[DeriveFieldInfo]) -> proc_macro2::TokenStream {
+    let mut field_tokens: proc_macro2::TokenStream = quote! {};
+
+    for field in derive_fields {
+        let field_name_str = &field.info.field_name;
+        let type_path = get_field_type_path(field);
+        let stored = field.info.stored;
+        let index_type = match field.info.index_type {
+            text_search_core::IndexType::indexed_string => {
+                quote! { text_search::IndexType::indexed_string }
+            }
+            text_search_core::IndexType::indexed_text => {
+                quote! { text_search::IndexType::indexed_text }
+            }
+            text_search_core::IndexType::indexed => quote! { text_search::IndexType::indexed },
+            text_search_core::IndexType::not_indexed => {
+                quote! { text_search::IndexType::not_indexed }
+            }
+        };
+
+        let token = quote! {
+            <#type_path as text_search::IndexField>::add_to_schema(&mut schema_builder, #field_name_str, #stored, #index_type);
+        };
+        token.to_tokens(&mut field_tokens);
+    }
+
+    quote! {
+        fn generate_schema() -> text_search::tantivy::schema::Schema {
+            let mut schema_builder = text_search::tantivy::schema::Schema::builder();
+            #field_tokens
+            schema_builder.build()
         }
     }
 }

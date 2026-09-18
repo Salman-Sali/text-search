@@ -25,7 +25,7 @@ impl<T: Indexable> IndexWriter<T> {
         }
 
         let dir = MmapDirectory::open(&path)?;
-        let schema = T::get_struct_info().generate_schema();
+        let schema = T::generate_schema();
         let index = Index::open_or_create(dir, schema.clone())?;
 
         let writer = index.writer(memory_budget_in_bytes)?;

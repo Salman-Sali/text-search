@@ -1,10 +1,10 @@
-use tantivy::TantivyDocument;
+use crate::StructInfo;
+use tantivy::{TantivyDocument, schema::Schema};
 
-use crate::struct_info::StructInfo;
-
-pub trait Indexable : Clone {
-    fn get_struct_info() -> StructInfo;
+pub trait Indexable: Clone {
     fn as_document(&self) -> TantivyDocument;
     fn from_doc(doc: tantivy::TantivyDocument) -> Self;
-    fn get_id_term(&self)  -> tantivy::Term;
+    fn get_id_term(&self) -> tantivy::Term;
+    fn generate_schema() -> Schema;
+    fn get_struct_info() -> StructInfo;
 }
