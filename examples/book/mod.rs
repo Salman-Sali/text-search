@@ -1,4 +1,4 @@
-use text_search::{Indexable, Indexed};
+use text_search::Indexed;
 
 #[derive(Indexed, Clone, Debug)]
 pub struct Book {

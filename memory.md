@@ -3,6 +3,24 @@
 ## Project Overview
 A Rust text search library built on top of Tantivy, providing derive macros for indexing and searching structs with a Diesel-like query builder API.
 
+## Derive Macro Usage
+
+The `Indexed` derive macro works without requiring `Indexable` trait in scope:
+
+```rust
+use text_search::Indexed; // Only need to import the derive macro
+
+#[derive(Indexed, Clone, Debug)]
+pub struct Book {
+    #[text_search(id)]
+    pub id: i32,
+    #[text_search(indexed_text, stored)]
+    pub name: String,
+    #[text_search(indexed_string, stored)]
+    pub author: String,
+}
+```
+
 ## Diesel-like SearchQuery API
 
 ### FieldRef and Filter Combinators
@@ -97,7 +115,7 @@ impl IndexField for MyCustomType {
 - `text-search-core/src/field_info.rs` - Field metadata
 - `text-search-core/src/search_query.rs` - SearchQuery, Filter, FieldRef types
 - `text-search-derive/src/field_info.rs` - Derive-time field parsing (uses `darling` 0.20 for `#[text_search(...)]` attribute parsing)
-- `text-search-derive/src/indexable.rs` - Indexable derive macro (generates FieldRef constants)
+- `text-search-derive/src/indexable.rs` - Indexable derive macro (generates FieldRef constants). **Note**: Uses fully-qualified syntax `<Self as text_search::Indexable>::generate_schema()` to avoid requiring users to import the `Indexable` trait.
 - `text-search/src/index_writer.rs` - IndexWriter with `delete_by_filter()`
 - `text-search/src/index_reader.rs` - IndexReader with search/hybrid_search/fuzzy_search/regex_search
 

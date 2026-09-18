@@ -1,4 +1,4 @@
-use text_search::{FieldRef, Filter, FilterOp, FilterValue, IndexWriter, Indexable, SearchQuery};
+use text_search::{FieldRef, Filter, FilterOp, FilterValue, IndexWriter, SearchQuery};
 
 /// Test Book struct for integration tests
 #[derive(text_search::Indexed, Clone, Debug, PartialEq)]

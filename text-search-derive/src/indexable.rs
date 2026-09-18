@@ -129,7 +129,7 @@ fn generate_as_document(derive_fields: &[DeriveFieldInfo]) -> proc_macro2::Token
 
     quote! {
         fn as_document(&self) -> text_search::tantivy::TantivyDocument {
-            let schema = Self::generate_schema();
+            let schema = <Self as text_search::Indexable>::generate_schema();
             let mut doc = text_search::tantivy::TantivyDocument::default();
             #field_tokens
             doc
@@ -169,7 +169,7 @@ fn generate_from_document(derive_fields: &[DeriveFieldInfo]) -> proc_macro2::Tok
 
     quote! {
         fn from_doc(doc : text_search::tantivy::TantivyDocument) -> Self {
-            let schema = Self::generate_schema();
+            let schema = <Self as text_search::Indexable>::generate_schema();
             Self {
                 #field_assignments
             }
@@ -190,7 +190,7 @@ fn generate_get_id_term(derive_fields: &[DeriveFieldInfo]) -> proc_macro2::Token
 
     quote! {
         fn get_id_term(&self) -> text_search::tantivy::Term {
-            let field = Self::generate_schema().get_field(#field_name_str).unwrap();
+            let field = <Self as text_search::Indexable>::generate_schema().get_field(#field_name_str).unwrap();
             <#type_path as text_search::IndexField>::to_term(&self.#field_name, field)
         }
     }
@@ -209,7 +209,7 @@ fn generate_get_term_from_id(derive_fields: &[DeriveFieldInfo]) -> proc_macro2::
 
     quote! {
         pub fn get_term_from_id(#field_name_ident: #type_path) -> text_search::tantivy::Term {
-            let field = Self::generate_schema().get_field(#field_name_str).unwrap();
+            let field = <Self as text_search::Indexable>::generate_schema().get_field(#field_name_str).unwrap();
             <#type_path as text_search::IndexField>::to_term(&#field_name_ident, field)
         }
     }
