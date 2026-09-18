@@ -883,7 +883,7 @@ dependencies = [
 
 [[package]]
 name = "text-search"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "tantivy",
  "tempfile",
@@ -894,7 +894,7 @@ dependencies = [
 
 [[package]]
 name = "text-search-core"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "syn 2.0.89",
  "tantivy",
@@ -902,7 +902,7 @@ dependencies = [
 
 [[package]]
 name = "text-search-derive"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "darling",
  "proc-macro2",
