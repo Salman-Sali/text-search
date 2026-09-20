@@ -20,6 +20,7 @@ fn main() {
             description: "First book".to_string(),
             published_on: 2021,
             tags: vec!["initial".to_string()],
+            isbn: Some("978-1111111111".to_string()),
         },
         Book {
             id: 2,
@@ -28,6 +29,7 @@ fn main() {
             description: "Second book".to_string(),
             published_on: 2022,
             tags: vec!["initial".to_string()],
+            isbn: None,
         },
     ];
 
@@ -60,6 +62,7 @@ fn main() {
             description: "Third book".to_string(),
             published_on: 2023,
             tags: vec!["added".to_string()],
+            isbn: Some("978-3333333333".to_string()),
         },
         Book {
             id: 4,
@@ -68,6 +71,7 @@ fn main() {
             description: "Fourth book".to_string(),
             published_on: 2024,
             tags: vec!["added".to_string()],
+            isbn: None,
         },
     ];
 

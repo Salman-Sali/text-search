@@ -26,6 +26,11 @@ fn main() {
                     description: format!("Description for book {}", id),
                     published_on: 2020 + (id % 5),
                     tags: vec![format!("tag {}", id % 4)],
+                    isbn: if id % 2 == 0 {
+                        Some(format!("978-{:010}", id))
+                    } else {
+                        None
+                    },
                 }
             })
             .collect();

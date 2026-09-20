@@ -69,6 +69,9 @@ let results = reader.search(&query)?;
 - **text-search-core**: Core traits (`Indexable`, `IndexField`) and types
 - **text-search-derive**: Procedural macros for deriving `Indexable`
 
+## Cargo Features
+- `uuid` - Enables `IndexField` implementation for `uuid::Uuid`
+
 ## Trait-Based Design
 
 ### IndexField Trait
@@ -95,6 +98,7 @@ Provided for:
 - `bool` - boolean indexed fields
 - `DateTime` (tantivy::DateTime) - date indexed fields
 - `Vec<T>` where T: IndexField - multi-value fields
+- `uuid::Uuid` (with `uuid` feature) - stored as string, parsed from string when retrieved
 
 ## Extensibility
 Users can implement `IndexField` for their own types:

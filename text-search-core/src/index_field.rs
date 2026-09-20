@@ -7,9 +7,6 @@ use crate::index_type::IndexType;
 
 /// Trait for types that can be indexed and stored in tantivy.
 pub trait IndexField: Sized {
-    /// Returns the type name for schema generation
-    fn type_name() -> &'static str;
-
     /// Adds a field with this type to the schema
     fn add_to_schema(builder: &mut SchemaBuilder, name: &str, stored: bool, index_type: IndexType);
 
@@ -25,10 +22,6 @@ pub trait IndexField: Sized {
 
 // String implementation
 impl IndexField for String {
-    fn type_name() -> &'static str {
-        "String"
-    }
-
     fn add_to_schema(builder: &mut SchemaBuilder, name: &str, stored: bool, index_type: IndexType) {
         let mut opts: TextOptions = match index_type {
             IndexType::indexed_string | IndexType::indexed => STRING,
@@ -59,10 +52,6 @@ impl IndexField for String {
 
 // i32 implementation (stored as i64)
 impl IndexField for i32 {
-    fn type_name() -> &'static str {
-        "i32"
-    }
-
     fn add_to_schema(builder: &mut SchemaBuilder, name: &str, stored: bool, index_type: IndexType) {
         let mut opts: NumericOptions = match index_type {
             IndexType::indexed => tantivy::schema::INDEXED.into(),
@@ -93,10 +82,6 @@ impl IndexField for i32 {
 
 // i64 implementation
 impl IndexField for i64 {
-    fn type_name() -> &'static str {
-        "i64"
-    }
-
     fn add_to_schema(builder: &mut SchemaBuilder, name: &str, stored: bool, index_type: IndexType) {
         let mut opts: NumericOptions = match index_type {
             IndexType::indexed => tantivy::schema::INDEXED.into(),
@@ -127,10 +112,6 @@ impl IndexField for i64 {
 
 // u32 implementation (stored as u64)
 impl IndexField for u32 {
-    fn type_name() -> &'static str {
-        "u32"
-    }
-
     fn add_to_schema(builder: &mut SchemaBuilder, name: &str, stored: bool, index_type: IndexType) {
         let mut opts: NumericOptions = match index_type {
             IndexType::indexed => tantivy::schema::INDEXED.into(),
@@ -161,10 +142,6 @@ impl IndexField for u32 {
 
 // u64 implementation
 impl IndexField for u64 {
-    fn type_name() -> &'static str {
-        "u64"
-    }
-
     fn add_to_schema(builder: &mut SchemaBuilder, name: &str, stored: bool, index_type: IndexType) {
         let mut opts: NumericOptions = match index_type {
             IndexType::indexed => tantivy::schema::INDEXED.into(),
@@ -195,10 +172,6 @@ impl IndexField for u64 {
 
 // f64 implementation
 impl IndexField for f64 {
-    fn type_name() -> &'static str {
-        "f64"
-    }
-
     fn add_to_schema(builder: &mut SchemaBuilder, name: &str, stored: bool, index_type: IndexType) {
         let mut opts: NumericOptions = match index_type {
             IndexType::indexed => tantivy::schema::INDEXED.into(),
@@ -229,10 +202,6 @@ impl IndexField for f64 {
 
 // bool implementation
 impl IndexField for bool {
-    fn type_name() -> &'static str {
-        "bool"
-    }
-
     fn add_to_schema(builder: &mut SchemaBuilder, name: &str, stored: bool, index_type: IndexType) {
         let mut opts: NumericOptions = match index_type {
             IndexType::indexed => tantivy::schema::INDEXED.into(),
@@ -263,10 +232,6 @@ impl IndexField for bool {
 
 // DateTime implementation
 impl IndexField for DateTime {
-    fn type_name() -> &'static str {
-        "DateTime"
-    }
-
     fn add_to_schema(builder: &mut SchemaBuilder, name: &str, stored: bool, index_type: IndexType) {
         let mut opts = DateOptions::default();
         match index_type {
@@ -299,10 +264,6 @@ impl IndexField for DateTime {
 // Vec<T> implementation for any T: IndexField
 // Note: Vec<T> only supports types that serialize to the same tantivy field type
 impl<T: IndexField> IndexField for Vec<T> {
-    fn type_name() -> &'static str {
-        "Vec"
-    }
-
     fn add_to_schema(builder: &mut SchemaBuilder, name: &str, stored: bool, index_type: IndexType) {
         // Vec<T> uses the same schema as T (tantivy supports multi-value fields)
         T::add_to_schema(builder, name, stored, index_type);
@@ -352,5 +313,60 @@ impl<T: IndexField> IndexFieldVec<T> for Vec<T> {
         doc.get_all(field)
             .filter_map(|v| T::from_owned_value(&v))
             .collect()
+    }
+}
+
+// Option<T> implementation for any T: IndexField
+impl<T: IndexField> IndexField for Option<T> {
+    fn add_to_schema(builder: &mut SchemaBuilder, name: &str, stored: bool, index_type: IndexType) {
+        T::add_to_schema(builder, name, stored, index_type);
+    }
+
+    fn add_to_document(&self, doc: &mut TantivyDocument, field: tantivy::schema::Field) {
+        if let Some(value) = self {
+            value.add_to_document(doc, field);
+        }
+    }
+
+    fn from_owned_value(value: &OwnedValue) -> Option<Self> {
+        Some(T::from_owned_value(value))
+    }
+
+    fn to_term(&self, field: tantivy::schema::Field) -> Term {
+        match self {
+            Some(value) => value.to_term(field),
+            None => panic!("Cannot create term from None"),
+        }
+    }
+}
+
+// Uuid implementation (stored as string)
+#[cfg(feature = "uuid")]
+impl IndexField for uuid::Uuid {
+    fn add_to_schema(builder: &mut SchemaBuilder, name: &str, stored: bool, index_type: IndexType) {
+        let mut opts: TextOptions = match index_type {
+            IndexType::indexed_string | IndexType::indexed => STRING,
+            IndexType::indexed_text => TEXT,
+            IndexType::not_indexed => Default::default(),
+        };
+        if stored {
+            opts = opts.set_stored();
+        }
+        builder.add_text_field(name, opts);
+    }
+
+    fn add_to_document(&self, doc: &mut TantivyDocument, field: tantivy::schema::Field) {
+        doc.add_text(field, &self.to_string());
+    }
+
+    fn from_owned_value(value: &OwnedValue) -> Option<Self> {
+        match value {
+            OwnedValue::Str(s) => uuid::Uuid::parse_str(s).ok(),
+            _ => None,
+        }
+    }
+
+    fn to_term(&self, field: tantivy::schema::Field) -> Term {
+        Term::from_field_text(field, &self.to_string())
     }
 }

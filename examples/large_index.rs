@@ -24,6 +24,11 @@ fn main() {
             description: format!("This is the description for book number {} about Rust.", i),
             published_on: 2000 + (i % 25),
             tags: vec![format!("tag{}", i % 10), format!("category{}", i % 5)],
+            isbn: if i % 3 == 0 {
+                Some(format!("978-{:010}", i))
+            } else {
+                None
+            },
         };
         index_writer.add(book);
     }
