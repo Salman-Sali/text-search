@@ -138,6 +138,20 @@ impl From<tantivy::DateTime> for FilterValue {
     }
 }
 
+#[cfg(feature = "uuid")]
+impl From<uuid::Uuid> for FilterValue {
+    fn from(value: uuid::Uuid) -> Self {
+        FilterValue::Str(value.to_string())
+    }
+}
+
+#[cfg(feature = "uuid")]
+impl From<&uuid::Uuid> for FilterValue {
+    fn from(value: &uuid::Uuid) -> Self {
+        FilterValue::Str(value.to_string())
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FilterOp {
     Eq,

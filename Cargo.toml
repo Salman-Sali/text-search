@@ -1,6 +1,6 @@
 [package]
 name = "text-search"
-version = "0.5.2"
+version = "0.5.3"
 edition = "2024"
 description = "A simple easy to use plug and play wrapper around tantivy for simple search scenarios."
 repository = "https://github.com/Salman-Sali/text-search"
@@ -26,5 +26,5 @@ tempfile = "3"
 members = [ "text-search-core", "text-search-derive"]
 
 [workspace.dependencies]
-text-search-core = { version = "0.5.2", path = "text-search-core" }
-text-search-derive = { version = "0.5.2", path = "text-search-derive" }
+text-search-core = { version = "0.5.3", path = "text-search-core" }
+text-search-derive = { version = "0.5.3", path = "text-search-derive" }
