@@ -912,6 +912,7 @@ dependencies = [
 name = "text-search"
 version = "0.5.3"
 dependencies = [
+ "serde",
  "tantivy",
  "tempfile",
  "text-search-core",

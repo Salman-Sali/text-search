@@ -1,5 +1,6 @@
 use text_search_core::Indexable;
 
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct PaginatedResult<T: Indexable> {
     pub data: Vec<T>,
     pub page: i64,
